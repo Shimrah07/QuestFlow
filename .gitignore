@@ -1,25 +1,29 @@
-Python
-
-venv/
-pycache/
-*.pyc
+# Python
+backend/venv/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
 .env
+*.egg-info/
+.pytest_cache/
 
-Node
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
 
-node_modules/
-dist/
-
-IDE
-
+# IDE
 .vscode/
 .idea/
 
-OS
-
+# OS
 .DS_Store
 Thumbs.db
 
-Logs
-
+# Logs
 *.log
+npm-debug.log*
+
+# Build artifacts
+*.pyc
