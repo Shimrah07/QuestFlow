@@ -12,6 +12,15 @@ class TaskCreate(BaseModel):
     project_id: Optional[int] = None
     due_date: Optional[datetime] = None
 
+class TaskUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=1000)
+    xp: Optional[int] = Field(default=None, ge=0)
+    assigned_to_id: Optional[int] = None
+    project_id: Optional[int] = None
+    due_date: Optional[datetime] = None
+    status: Optional[str] = Field(default=None, description="Todo, In Progress, Completed")
+
 class TaskStatusUpdate(BaseModel):
     status: str = Field(description="Todo, In Progress, Completed")
 

@@ -1,7 +1,15 @@
 from fastapi import APIRouter, Depends, status, Body
 from sqlalchemy.orm import Session
 from app.core.deps import get_db
-from app.schemas.auth import UserRegister, UserLogin, Token, UserOut
+from app.schemas.auth import (
+    UserRegister,
+    UserLogin,
+    Token,
+    UserOut,
+    PasswordResetRequest,
+    OTPVerificationRequest,
+    PasswordResetConfirm
+)
 from app.services.auth_service import AuthService
 
 router = APIRouter()
@@ -35,3 +43,24 @@ def logout(refresh_token: str = Body(..., embed=True), db: Session = Depends(get
     """
     AuthService.revoke_session(db=db, refresh_token=refresh_token)
     return None
+
+@router.post("/forgot-password")
+def forgot_password(schema: PasswordResetRequest, db: Session = Depends(get_db)):
+    """
+    Requests a 6-digit OTP verification code for password reset.
+    """
+    return AuthService.request_password_reset(db=db, schema=schema)
+
+@router.post("/verify-otp")
+def verify_otp(schema: OTPVerificationRequest):
+    """
+    Validates the 6-digit OTP code.
+    """
+    return AuthService.verify_otp(schema=schema)
+
+@router.post("/reset-password")
+def reset_password(schema: PasswordResetConfirm, db: Session = Depends(get_db)):
+    """
+    Resets the user password using verified OTP.
+    """
+    return AuthService.confirm_password_reset(db=db, schema=schema)

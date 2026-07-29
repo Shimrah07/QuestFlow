@@ -1,16 +1,20 @@
 import os
-# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, Field
-# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 
 # Load environment variables from the parent directory .env file
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"))
 
+def _get_required_env(var_name: str) -> str:
+    val = os.getenv(var_name)
+    if not val:
+        raise ValueError(f"CRITICAL SECURITY CONFIGURATION ERROR: Environment variable '{var_name}' is missing. Hardcoded secrets are prohibited.")
+    return val
+
 class Settings(BaseModel):
     """
     Application configurations validated using Pydantic v2.
-    Loads configurations from .env with fallback defaults.
+    Requires environment variables for security keys.
     """
     PROJECT_NAME: str = Field(default=os.getenv("PROJECT_NAME", "Gamified Task & Expense Management System"))
     API_V1_STR: str = Field(default=os.getenv("API_V1_STR", "/api/v1"))
@@ -20,15 +24,25 @@ class Settings(BaseModel):
     DATABASE_URL: str = Field(
         default=os.getenv(
             "DATABASE_URL",
-            "mssql+pyodbc://sa:YourStrongPassword123@localhost:1433/task_expense_db?driver=ODBC+Driver+17+for+SQL+Server"
+            "mssql+pyodbc://localhost/TaskExpenseDB?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes"
         )
     )
 
-    # JWT Tokens Configuration
-    JWT_SECRET_KEY: str = Field(default=os.getenv("JWT_SECRET_KEY", "supersecureaccesskey123!"))
-    JWT_REFRESH_SECRET_KEY: str = Field(default=os.getenv("JWT_REFRESH_SECRET_KEY", "supersecurerefreshkey123!"))
+    # JWT Tokens Configuration - Require explicit environment variables
+    JWT_SECRET_KEY: str = Field(default_factory=lambda: _get_required_env("JWT_SECRET_KEY"))
+    JWT_REFRESH_SECRET_KEY: str = Field(default_factory=lambda: _get_required_env("JWT_REFRESH_SECRET_KEY"))
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15")))
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7")))
+
+    # CORS Allowed Origins
+    ALLOWED_ORIGINS: list[str] = Field(
+        default_factory=lambda: [
+            origin.strip() for origin in os.getenv(
+                "ALLOWED_ORIGINS",
+                "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:3000,http://127.0.0.1:3000"
+            ).split(",") if origin.strip()
+        ]
+    )
 
     # Security Algorithm Configurations
     ALGORITHM: str = "HS256"

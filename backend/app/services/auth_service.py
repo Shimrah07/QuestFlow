@@ -1,9 +1,16 @@
-from datetime import datetime, timezone
+import random
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from fastapi import HTTPException, status
 from app.models.user import User, RefreshToken
-from app.schemas.auth import UserRegister, UserLogin
+from app.schemas.auth import (
+    UserRegister,
+    UserLogin,
+    PasswordResetRequest,
+    OTPVerificationRequest,
+    PasswordResetConfirm
+)
 from app.core.security import (
     verify_password,
     get_password_hash,
@@ -15,8 +22,92 @@ from app.core.security import (
 class AuthService:
     """
     Pure Business Logic Service for handling Authentication, Account Creation,
-    and Active Token/Session Lifecycles.
+    Active Token/Session Lifecycles, and Password Reset (Lost Key).
     """
+
+    _otp_store = {}
+
+    @staticmethod
+    def request_password_reset(db: Session, schema: PasswordResetRequest) -> dict:
+        email = schema.email.lower()
+        user = db.scalar(select(User).where(User.email == email))
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No account registered under this Gmail address."
+            )
+        
+        # Generate 6-digit OTP code
+        otp_code = f"{random.randint(100000, 999999)}"
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+        
+        AuthService._otp_store[email] = {
+            "code": otp_code,
+            "expires_at": expires_at
+        }
+        
+        return {
+            "message": "Verification OTP generated successfully.",
+            "email": email,
+            "otp_code": otp_code
+        }
+
+    @staticmethod
+    def verify_otp(schema: OTPVerificationRequest) -> dict:
+        email = schema.email.lower()
+        stored = AuthService._otp_store.get(email)
+        
+        if not stored:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No verification code was requested for this email."
+            )
+            
+        if datetime.now(timezone.utc) > stored["expires_at"]:
+            AuthService._otp_store.pop(email, None)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Verification OTP has expired. Please request a new code."
+            )
+            
+        if stored["code"] != schema.code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid 6-digit verification code."
+            )
+            
+        return {
+            "message": "Verification code validated successfully.",
+            "verified": True
+        }
+
+    @staticmethod
+    def confirm_password_reset(db: Session, schema: PasswordResetConfirm) -> dict:
+        email = schema.email.lower()
+        stored = AuthService._otp_store.get(email)
+        
+        if not stored or stored["code"] != schema.code or datetime.now(timezone.utc) > stored["expires_at"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired verification session."
+            )
+            
+        user = db.scalar(select(User).where(User.email == email))
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Target account not found."
+            )
+            
+        user.password_hash = get_password_hash(schema.new_password)
+        db.commit()
+        
+        # Clear used OTP from memory
+        AuthService._otp_store.pop(email, None)
+        
+        return {
+            "message": "Secret Key reset successfully. You may now log in with your new key."
+        }
 
     @staticmethod
     def register_user(db: Session, schema: UserRegister) -> User:

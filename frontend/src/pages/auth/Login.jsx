@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import Card from "../../components/common/Card";
 import Spinner from "../../components/common/Spinner";
-import { Mail, Lock, LogIn, KeyRound, Sparkles } from "lucide-react";
+import { Mail, Lock, LogIn, KeyRound, Sparkles, Eye, EyeOff } from "lucide-react";
 
 const Login = () => {
   const { login, logout, loading } = useAuth();
@@ -13,6 +13,7 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isNotRobot, setIsNotRobot] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState("");
 
   const handleSubmit = async (e) => {
@@ -130,13 +131,22 @@ const Login = () => {
             <div className="relative">
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
-                className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-neon-violet/60 focus:ring-1 focus:ring-neon-violet/20 transition-all"
+                className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-3 pl-11 pr-11 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-neon-violet/60 focus:ring-1 focus:ring-neon-violet/20 transition-all"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                tabIndex={-1}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-neon-violet transition-colors cursor-pointer"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 

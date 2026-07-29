@@ -35,6 +35,7 @@ const Approvals = () => {
       });
       showToast(`Transaction claims ${action === "Approved" ? "approved" : "rejected"} successfully.`, action === "Approved" ? "success" : "error");
       setItems((prev) => prev.filter((item) => item.id !== id));
+      window.dispatchEvent(new Event("approvals-updated"));
     } catch (error) {
       showToast("Failed to process transaction decision.", "error");
     }

@@ -26,8 +26,8 @@ const DashboardLayout = () => {
       <div className="absolute inset-0 cyber-grid opacity-20 pointer-events-none" />
 
       {/* Floating neon ambient blur elements */}
-      <div className="absolute top-1/3 left-1/3 w-80 h-80 rounded-full bg-neon-violet/5 blur-[128px] pointer-events-none" />
-      <div className="absolute bottom-1/3 right-1/3 w-[350px] h-[350px] rounded-full bg-neon-emerald/5 blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/3 left-1/3 w-80 h-80 rounded-full bg-blur-1 blur-[128px] pointer-events-none" />
+      <div className="absolute bottom-1/3 right-1/3 w-[350px] h-[350px] rounded-full bg-blur-2 blur-[120px] pointer-events-none" />
 
       {/* Persistent Left Nav Navigation */}
       <Sidebar />

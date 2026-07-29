@@ -2,6 +2,7 @@ from app.db.session import engine
 from app.db.base import Base
 # pyrefly: ignore [missing-import]
 from fastapi import FastAPI
+# pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.auth import router as auth_router
 from app.routes.users import router as users_router
@@ -22,11 +23,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configure CORS to resolve network errors
+# Configure CORS to enforce origin restrictions while supporting dev environment
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

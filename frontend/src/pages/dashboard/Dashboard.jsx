@@ -9,14 +9,13 @@ import {
   CheckCircle2,
   Hourglass,
   DollarSign,
-  Zap,
   ArrowRight,
   TrendingUp
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Dashboard = () => {
-  const { user, gainXP } = useAuth();
+  const { user } = useAuth();
   const { showToast } = useToast();
 
   const [tasks, setTasks] = useState([]);
@@ -111,15 +110,6 @@ const Dashboard = () => {
               Workspace connection verified. Access Tier: {user?.role}. Operational cycle is active.
             </p>
           </div>
-
-          {/* Gamification Simulator Trigger Button */}
-          <button
-            onClick={() => gainXP(150)}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-neon-violet/10 border border-neon-violet/40 hover:bg-neon-violet hover:text-white hover:shadow-[0_0_15px_rgba(139,92,246,0.35)] hover:border-transparent text-xs font-bold uppercase tracking-wider text-neon-violet transition-all duration-300 cursor-pointer"
-          >
-            <Zap className="w-4 h-4 animate-bounce" />
-            <span>Simulate XP Gain (+150 XP)</span>
-          </button>
         </div>
       </div>
 

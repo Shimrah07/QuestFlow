@@ -50,7 +50,14 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
       return { success: true };
     } catch (error) {
-      const errMsg = error.response?.data?.detail || error.message || "Registration failed.";
+      const detail = error.response?.data?.detail;
+      let errMsg;
+      if (Array.isArray(detail)) {
+        // FastAPI Pydantic validation errors return detail as an array of objects
+        errMsg = detail.map((d) => d.msg?.replace(/^Value error, /, "") ?? JSON.stringify(d)).join(" | ");
+      } else {
+        errMsg = detail || error.message || "Registration failed.";
+      }
       showToast(errMsg, "error");
       setLoading(false);
       return { success: false, error: errMsg };
@@ -63,32 +70,16 @@ export const AuthProvider = ({ children }) => {
     showToast("Session connection terminated.", "info");
   };
 
-  // Gamification: helper to simulate XP increments in UI
-  const gainXP = (xpAmount) => {
-    if (!user) return;
-    setUser((prev) => {
-      if (!prev) return null;
-      const nextPoints = prev.points + xpAmount;
-      const nextLevel = Math.floor(nextPoints / 500) + 1; // 500 XP per level
-      
-      if (nextLevel > prev.level) {
-        showToast(`LEVEL UP! You reached Level ${nextLevel}! 🚀`, "success");
-      } else {
-        showToast(`+${xpAmount} XP Gained!`, "info");
-      }
-
-      const updated = {
-        ...prev,
-        points: nextPoints,
-        level: nextLevel
-      };
-      localStorage.setItem("cyber_session", JSON.stringify(updated));
-      return updated;
-    });
+  // Refresh current user session details from backend
+  const refreshUserData = (updatedUser) => {
+    if (updatedUser) {
+      setUser(updatedUser);
+      localStorage.setItem("cyber_session", JSON.stringify(updatedUser));
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, gainXP }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUserData }}>
       {children}
     </AuthContext.Provider>
   );

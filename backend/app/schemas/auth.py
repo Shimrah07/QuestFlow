@@ -7,7 +7,17 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str
     first_name: str = Field(min_length=2, max_length=30)
-    role: str = Field(default="Employee", description="Role selection (Admin, Manager, Employee)")
+    role: str = Field(default="Employee", description="Role selection (Manager, Employee). Admin role cannot be self-registered.")
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        allowed_roles = {"Employee", "Manager"}
+        if v == "Admin":
+            raise ValueError("Admin accounts cannot be self-registered. Admin access is pre-configured by the system.")
+        if v not in allowed_roles:
+            raise ValueError(f"Invalid role. Allowed roles for registration are: {', '.join(sorted(allowed_roles))}.")
+        return v
 
     @field_validator("first_name")
     @classmethod
@@ -77,3 +87,10 @@ class PasswordResetConfirm(BaseModel):
     email: EmailStr
     code: str
     new_password: str = Field(min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        if not re.match(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$", v):
+            raise ValueError("Password must be at least 8 characters long, contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).")
+        return v

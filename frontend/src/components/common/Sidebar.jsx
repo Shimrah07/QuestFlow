@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import api from "../../services/api";
 import {
   LayoutDashboard,
   CheckSquare,
@@ -16,6 +17,31 @@ import {
 
 const Sidebar = () => {
   const { user } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const fetchPendingCount = async () => {
+    if (!user || user.role === "Employee") return;
+    try {
+      const response = await api.get("/expenses");
+      const pending = response.data.filter((e) => e.status === "Pending");
+      setPendingCount(pending.length);
+    } catch (error) {
+      // ignore silently if network fails
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingCount();
+
+    const handleUpdate = () => fetchPendingCount();
+    window.addEventListener("approvals-updated", handleUpdate);
+    const interval = setInterval(fetchPendingCount, 10000);
+
+    return () => {
+      window.removeEventListener("approvals-updated", handleUpdate);
+      clearInterval(interval);
+    };
+  }, [user]);
 
   const links = [
     {
@@ -34,14 +60,14 @@ const Sidebar = () => {
       to: "/expenses",
       label: "Expense Tracking",
       icon: Receipt,
-      roles: ["Admin", "Employee"],
+      roles: ["Admin", "Manager", "Employee"],
     },
     {
       to: "/approvals",
       label: "Review Queues",
       icon: FileCheck,
       roles: ["Admin", "Manager"], // Block Employees in RBAC
-      badge: "Pending",
+      badge: pendingCount > 0 ? (pendingCount > 1 ? `Pending (${pendingCount})` : "Pending") : null,
     },
     {
       to: "/admin/users",

@@ -1,20 +1,120 @@
 @import "tailwindcss";
 
-@theme {
-  /* Color Palette - Dark Cyberpunk Futuristic */
-  --color-bg-deep: #090d16;
-  --color-bg-panel: #131c31;
-  --color-bg-card: rgba(19, 28, 49, 0.7);
-  --color-border-glow: rgba(139, 92, 246, 0.2);
+:root {
+  /* Default Cyberpunk Dark Mode Palette */
+  --bg-deep: #090d16;
+  --bg-panel: #131c31;
+  --bg-card: rgba(19, 28, 49, 0.7);
+  --border-glow: rgba(139, 92, 246, 0.2);
+  --border-card: rgba(255, 255, 255, 0.05);
+  --border-panel: rgba(255, 255, 255, 0.03);
+
+  --neon-violet: #8b5cf6;
+  --neon-violet-glow: rgba(139, 92, 246, 0.4);
+  --neon-emerald: #10b981;
+  --neon-emerald-glow: rgba(16, 185, 129, 0.4);
+  --neon-amber: #f59e0b;
+  --neon-amber-glow: rgba(245, 158, 11, 0.4);
+  --neon-rose: #f43f5e;
+  --neon-rose-glow: rgba(244, 63, 94, 0.4);
+
+  --cyber-grid-line: rgba(255, 255, 255, 0.015);
   
-  --color-neon-violet: #8b5cf6;
-  --color-neon-violet-glow: rgba(139, 92, 246, 0.4);
-  --color-neon-emerald: #10b981;
-  --color-neon-emerald-glow: rgba(16, 185, 129, 0.4);
-  --color-neon-amber: #f59e0b;
-  --color-neon-amber-glow: rgba(245, 158, 11, 0.4);
-  --color-neon-rose: #f43f5e;
-  --color-neon-rose-glow: rgba(244, 63, 94, 0.4);
+  --scrollbar-track: #090d16;
+  --scrollbar-thumb: #1e293b;
+  --scrollbar-thumb-hover: #8b5cf6;
+
+  /* Ambient blurs */
+  --blur-1: rgba(139, 92, 246, 0.08); /* neon-violet */
+  --blur-2: rgba(16, 185, 129, 0.05);  /* neon-emerald */
+
+  /* Standard Tailwind Dark Slate Palette */
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+  --slate-950: #020617;
+}
+
+:root.light {
+  /* Warm yellowish / whitish tones with subtle pink & yellow vibes */
+  --bg-deep: #faf7f2; /* Elegant Creamy Ivory Background */
+  --bg-panel: #f6eedb; /* Warm buttery sand panel */
+  --bg-card: rgba(255, 255, 255, 0.88); /* Pristine white glass card */
+  --border-glow: rgba(244, 63, 94, 0.15); /* Soft pink glow */
+  --border-card: rgba(244, 63, 94, 0.08); /* Subtle pink card border */
+  --border-panel: rgba(245, 158, 11, 0.08); /* Subtle yellow panel border */
+
+  --neon-violet: #db2777; /* Playful dark pink/magenta for contrast */
+  --neon-violet-glow: rgba(219, 39, 119, 0.2);
+  --neon-emerald: #047857; /* Deep emerald green */
+  --neon-emerald-glow: rgba(4, 120, 87, 0.2);
+  --neon-amber: #ca8a04; /* Bright golden yellow */
+  --neon-amber-glow: rgba(202, 138, 4, 0.2);
+  --neon-rose: #e11d48; /* Crimson pink */
+  --neon-rose-glow: rgba(225, 29, 72, 0.2);
+
+  --cyber-grid-line: rgba(219, 39, 119, 0.02); /* Soft pink grid lines */
+  
+  --scrollbar-track: #faf7f2;
+  --scrollbar-thumb: #e5dec9;
+  --scrollbar-thumb-hover: #db2777;
+
+  /* Ambient blurs – pastel pink & warm yellow */
+  --blur-1: rgba(244, 63, 94, 0.09); /* Soft Pastel Rose/Pink */
+  --blur-2: rgba(245, 158, 11, 0.09); /* Soft Pastel Gold/Yellow */
+
+  /* Inverted Slate Palette for Light Mode */
+  --slate-50: #0f172a;
+  --slate-100: #1e293b;
+  --slate-200: #334155;
+  --slate-300: #475569;
+  --slate-400: #64748b;
+  --slate-500: #94a3b8;
+  --slate-600: #cbd5e1;
+  --slate-700: #e2e8f0;
+  --slate-800: #f1f5f9;
+  --slate-900: #f8fafc;
+  --slate-950: #ffffff;
+}
+
+@theme {
+  --color-bg-deep: var(--bg-deep);
+  --color-bg-panel: var(--bg-panel);
+  --color-bg-card: var(--bg-card);
+  --color-border-glow: var(--border-glow);
+  
+  --color-neon-violet: var(--neon-violet);
+  --color-neon-violet-glow: var(--neon-violet-glow);
+  --color-neon-emerald: var(--neon-emerald);
+  --color-neon-emerald-glow: var(--neon-emerald-glow);
+  --color-neon-amber: var(--neon-amber);
+  --color-neon-amber-glow: var(--neon-amber-glow);
+  --color-neon-rose: var(--neon-rose);
+  --color-neon-rose-glow: var(--neon-rose-glow);
+
+  /* Ambient blurs */
+  --color-blur-1: var(--blur-1);
+  --color-blur-2: var(--blur-2);
+
+  /* Override Slate Palette dynamically */
+  --color-slate-50: var(--slate-50);
+  --color-slate-100: var(--slate-100);
+  --color-slate-200: var(--slate-200);
+  --color-slate-300: var(--slate-300);
+  --color-slate-400: var(--slate-400);
+  --color-slate-500: var(--slate-500);
+  --color-slate-600: var(--slate-600);
+  --color-slate-700: var(--slate-700);
+  --color-slate-800: var(--slate-800);
+  --color-slate-900: var(--slate-900);
+  --color-slate-950: var(--slate-950);
 
   /* Fonts */
   --font-display: "Outfit", system-ui, sans-serif;
@@ -24,43 +124,43 @@
 /* Glassmorphism & Cyberpunk Custom Utility Classes */
 @layer utilities {
   .glass-card {
-    background: rgba(19, 28, 49, 0.5);
+    background: var(--bg-card);
     backdrop-filter: blur(16px) saturate(180%);
     -webkit-backdrop-filter: blur(16px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    border: 1px solid var(--border-card);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.06);
   }
 
   .glass-panel {
-    background: rgba(9, 13, 22, 0.7);
+    background: var(--bg-panel);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-panel);
   }
 
   .neon-border-violet {
-    border-color: rgba(139, 92, 246, 0.4);
-    box-shadow: 0 0 15px rgba(139, 92, 246, 0.25);
+    border-color: var(--neon-violet-glow);
+    box-shadow: 0 0 15px var(--neon-violet-glow);
   }
 
   .neon-border-emerald {
-    border-color: rgba(16, 185, 129, 0.4);
-    box-shadow: 0 0 15px rgba(16, 185, 129, 0.25);
+    border-color: var(--neon-emerald-glow);
+    box-shadow: 0 0 15px var(--neon-emerald-glow);
   }
   
   .neon-text-violet {
-    text-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
+    text-shadow: 0 0 8px var(--neon-violet-glow);
   }
   
   .neon-text-emerald {
-    text-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+    text-shadow: 0 0 8px var(--neon-emerald-glow);
   }
 
   .cyber-grid {
     background-size: 40px 40px;
     background-image: 
-      linear-gradient(to right, rgba(255, 255, 255, 0.01) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 255, 255, 0.01) 1px, transparent 1px);
+      linear-gradient(to right, var(--cyber-grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--cyber-grid-line) 1px, transparent 1px);
   }
 }
 
@@ -71,22 +171,23 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--scrollbar-thumb);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #8b5cf6;
+  background: var(--scrollbar-thumb-hover);
 }
 
 body {
   margin: 0;
-  background-color: #090d16;
-  color: #f8fafc;
+  background-color: var(--bg-deep);
+  color: var(--slate-100);
   font-family: "Inter", system-ui, sans-serif;
   overflow-x: hidden;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }

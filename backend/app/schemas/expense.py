@@ -8,6 +8,11 @@ class ExpenseCreate(BaseModel):
     category: str = Field(min_length=1, max_length=100)
     amount: float = Field(gt=0)
 
+class ExpenseUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    category: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    amount: Optional[float] = Field(default=None, gt=0)
+
 class ExpenseStatusUpdate(BaseModel):
     status: str = Field(description="Pending, Approved, Rejected")
 

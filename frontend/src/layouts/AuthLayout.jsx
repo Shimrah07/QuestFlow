@@ -3,6 +3,7 @@ import { Outlet, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ShieldCheck, Cpu } from "lucide-react";
 import { motion } from "framer-motion";
+import ThemeToggle from "../components/common/ThemeToggle";
 
 const AuthLayout = () => {
   const { user } = useAuth();
@@ -18,8 +19,8 @@ const AuthLayout = () => {
       <div className="absolute inset-0 cyber-grid opacity-30 pointer-events-none" />
 
       {/* Floating neon ambient blur elements */}
-      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-neon-violet/10 blur-[128px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-[400px] h-[400px] rounded-full bg-neon-emerald/5 blur-[150px] pointer-events-none" />
+      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-blur-1 blur-[128px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-[400px] h-[400px] rounded-full bg-blur-2 blur-[150px] pointer-events-none" />
 
       {/* Left Pane - Cinematic Cyberpunk Branding (Hidden on Small Screens) */}
       <div className="hidden lg:flex lg:w-1/2 p-12 flex-col justify-between relative border-r border-slate-900/50 bg-slate-950/40 backdrop-blur-md">
@@ -71,6 +72,9 @@ const AuthLayout = () => {
 
       {/* Right Pane - Form container */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative">
+        <div className="absolute top-6 right-6 z-20">
+          <ThemeToggle />
+        </div>
         <div className="w-full max-w-md relative z-10">
           <Outlet />
         </div>

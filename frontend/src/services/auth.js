@@ -52,6 +52,40 @@ class AuthService {
   }
 
   /**
+   * Request password reset OTP code.
+   * @param {string} email
+   */
+  static async forgotPassword(email) {
+    const response = await api.post("/auth/forgot-password", { email });
+    return response.data;
+  }
+
+  /**
+   * Verify 6-digit OTP code.
+   * @param {string} email
+   * @param {string} code
+   */
+  static async verifyOTP(email, code) {
+    const response = await api.post("/auth/verify-otp", { email, code });
+    return response.data;
+  }
+
+  /**
+   * Reset user password.
+   * @param {string} email
+   * @param {string} code
+   * @param {string} new_password
+   */
+  static async resetPassword(email, code, new_password) {
+    const response = await api.post("/auth/reset-password", {
+      email,
+      code,
+      new_password,
+    });
+    return response.data;
+  }
+
+  /**
    * Retrieve currently stored user session.
    * @returns {object|null}
    */

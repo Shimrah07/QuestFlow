@@ -4,7 +4,7 @@ from sqlalchemy import select
 from app.core.deps import get_db, check_role
 from app.models.user import User
 from app.schemas.auth import UserOut
-from app.schemas.user_admin import UserStatusUpdate, UserRoleUpdate
+from app.schemas.user_admin import UserStatusUpdate, UserRoleUpdate, XpUpdate
 
 router = APIRouter()
 
@@ -14,6 +14,14 @@ def list_users(db: Session = Depends(get_db), current_user: User = Depends(check
     List all users in the system. (Admin and Manager only)
     """
     return db.scalars(select(User)).all()
+
+@router.get("/leaderboard", response_model=list[UserOut])
+def get_leaderboard(db: Session = Depends(get_db), current_user: User = Depends(check_role(["Admin", "Manager", "Employee"]))):
+    """
+    Get system standings sorted by XP/points descending. (All authenticated users)
+    """
+    return db.scalars(select(User).order_by(User.points.desc())).all()
+
 
 @router.put("/{user_id}/status", response_model=UserOut)
 def update_user_status(user_id: int, schema: UserStatusUpdate, db: Session = Depends(get_db), current_user: User = Depends(check_role(["Admin"]))):

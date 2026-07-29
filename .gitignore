@@ -14,7 +14,8 @@ frontend/dist/
 frontend/.vite/
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 
 # OS
