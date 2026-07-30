@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="frontend/public/logo.svg" width="96" alt="QuestFlow Logo" />
+  <img src="./frontend/public/logo.svg" width="96" alt="QuestFlow Logo" />
 </p>
 
 <h1 align="center">QuestFlow</h1>
@@ -8,19 +8,55 @@
 </p>
 
 <p align="center">
-  QuestFlow is a modern gamified productivity platform that helps teams manage projects, tasks, and expenses while rewarding operational progress with XP, achievements, and real-time leaderboards.
+  <a href="https://github.com/Shimrah07/QuestFlow"><img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React 19" /></a>
+  <a href="https://github.com/Shimrah07/QuestFlow"><img src="https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" /></a>
+  <a href="https://github.com/Shimrah07/QuestFlow"><img src="https://img.shields.io/badge/Database-SQL_Server-CC292B?style=for-the-badge&logo=microsoftsqlserver&logoColor=white" alt="SQL Server" /></a>
+  <a href="https://github.com/Shimrah07/QuestFlow"><img src="https://img.shields.io/badge/Styling-Tailwind_v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" /></a>
+  <a href="https://github.com/Shimrah07/QuestFlow"><img src="https://img.shields.io/badge/E2E-Playwright-2EAD33?style=for-the-badge&logo=playwright&logoColor=white" alt="Playwright" /></a>
+  <a href="https://github.com/Shimrah07/QuestFlow"><img src="https://img.shields.io/badge/Security-JWT_Rotation-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white" alt="JWT Security" /></a>
+  <a href="https://github.com/Shimrah07/QuestFlow"><img src="https://img.shields.io/badge/Build-Passing-brightgreen?style=for-the-badge" alt="Build Status" /></a>
+  <a href="https://github.com/Shimrah07/QuestFlow"><img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License" /></a>
 </p>
 
 ---
 
-## 🌟 Features
+QuestFlow is a full-stack gamified productivity platform that helps teams manage projects, tasks, and expenses through an engaging XP-based progression system. It combines modern UI, secure authentication, role-based access control, and real-time leaderboards into a collaborative productivity experience.
 
-- **Gamified Task Progression:** Complete tasks to earn XP points, level up, and unlock achievements.
-- **Kanban Task Operations:** Dynamic task management with assignment scopes, priorities, and status transitions.
-- **Expense Tracking & Approval Engine:** Submit expense claims with receipt attachments and route them to Managers/Admins for review.
-- **Real-Time Leaderboard:** Competitive standings filtered by active users sorted by earned XP.
-- **Role-Based Access Control (RBAC):** Three distinct authorization tiers (`Admin`, `Manager`, `Employee`) with token rotation security.
-- **Dark Futuristic Aesthetic:** Glassmorphic UI styled with React 19, Vite, Framer Motion, and Tailwind CSS v4.
+---
+
+# 🌐 Live Demo
+
+- **Frontend Application:** *Coming Soon*
+- **Backend API Documentation:** *Coming Soon*
+
+---
+
+# ✨ Highlights
+
+- **JWT Authentication:** Dual-token mechanism with access and refresh token rotation.
+- **Role-Based Access Control (RBAC):** Three distinct authorization tiers (`Admin`, `Manager`, `Employee`).
+- **Gamified XP System:** Server-validated XP awarding upon task completion.
+- **Achievements & Levels:** Dynamic level calculations and badge unlock evaluation.
+- **Real-Time Leaderboards:** Standings filtered by active users sorted by total earned XP.
+- **Expense Approval Workflow:** Multi-tier claim submissions with self-approval prevention.
+- **Project Operations:** CRUD operations with soft-delete archival and search filtering.
+- **Responsive Design:** Dark-mode glassmorphic interface tailored for mobile, tablet, and desktop.
+- **Automated Testing:** 64 E2E browser automation tests with Playwright and Pytest backend coverage.
+- **FastAPI REST API:** Async endpoints with Pydantic v2 data validation schemas.
+- **SQL Server Integration:** Relational database integration via SQLAlchemy 2.0 and PyODBC.
+
+---
+
+# 📸 Screenshots
+
+| Feature | Preview |
+| :--- | :--- |
+| **Login Page** | ![Login Page](./docs/screenshots/login.png) |
+| **Dashboard** | ![Dashboard](./docs/screenshots/dashboard.png) |
+| **Task Operations** | ![Task Board](./docs/screenshots/tasks.png) |
+| **Leaderboard** | ![Leaderboard](./docs/screenshots/leaderboard.png) |
+| **Expense Management** | ![Expense Management](./docs/screenshots/expenses.png) |
+| **Dark Theme & Glassmorphism** | ![Dark Theme](./docs/screenshots/theme.png) |
 
 ---
 
@@ -38,7 +74,7 @@
 ## 📁 Repository Layout
 
 ```text
-task-expense-management/
+QuestFlow/
 ├── backend/
 │   ├── app/
 │   │   ├── core/                  # Security, JWT, Pydantic config settings
@@ -46,8 +82,8 @@ task-expense-management/
 │   │   ├── models/                # Database entities (User, Task, Expense, Project)
 │   │   ├── routes/                # FastAPI APIRouter endpoints
 │   │   └── schemas/               # Request/Response DTOs
-│   ├── tests/                     # Pytest backend suite
-│   └── seed_e2e_users.py          # Unified database seed script
+│   ├── scripts/                   # Database seed utilities (seed_e2e_users.py)
+│   └── tests/                     # Pytest backend test suite
 │
 ├── frontend/
 │   ├── e2e/                       # Playwright end-to-end spec suite
@@ -161,16 +197,22 @@ graph TD
 
 ---
 
-## 🚀 Deployment Strategy
+# 🚀 Production Deployment
 
-1. **Backend Deployment:** Host containerized FastAPI instance on AWS ECS / Azure App Service with Environment Variable Secrets.
-2. **Frontend Deployment:** Host static build output (`dist/`) on Vercel / Netlify / AWS CloudFront CDN with SSL termination.
-3. **Database Cloud Infrastructure:** Managed Azure SQL Database or AWS RDS for SQL Server with encrypted connections.
+- **Frontend:** Vercel
+- **Backend:** Render / Azure App Service
+- **Database:** Azure SQL Server
+- **Environment:** Production Environment Variables
+- **HTTPS Security:** Enabled
 
 ---
 
-## 🔮 Future Roadmap
+## 👨‍💻 About This Project
 
-- [ ] Mobile PWA offline task synchronization
-- [ ] Slack & Webhook notifications on expense status changes
-- [ ] Team vs Team XP leaderboard competitions
+QuestFlow was built as a portfolio-quality full-stack application to demonstrate modern software engineering practices, secure authentication, enterprise-inspired architecture, automated testing, and responsive user experience using React, FastAPI, SQL Server, and Playwright.
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
