@@ -184,35 +184,71 @@ const Dashboard = () => {
         {/* Gamified Achievements Spotlight panel */}
         <Card glowColor="none" hoverEffect={false} className="bg-bg-card border-slate-900/60 flex flex-col justify-between">
           <div>
-            <h3 className="font-display font-bold text-sm tracking-wider uppercase text-slate-200 mb-6">
-              Achievements Unlock Radar
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display font-bold text-sm tracking-wider uppercase text-slate-200">
+                Achievements Radar
+              </h3>
+              <Link to="/leaderboard" className="text-[10px] font-bold text-neon-violet hover:underline uppercase tracking-wider flex items-center gap-1">
+                Gallery <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
 
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-3.5 p-3 rounded-xl bg-neon-violet/5 border border-neon-violet/20">
-                <div className="w-9 h-9 rounded-lg bg-neon-violet/10 border border-neon-violet/25 flex items-center justify-center text-neon-violet font-bold text-xs shadow-[0_0_8px_rgba(139,92,246,0.25)]">
-                  ⚡
+            <div className="flex flex-col gap-3">
+              {[
+                {
+                  title: "First Ascent",
+                  desc: "Achieved Level 2 clearance",
+                  unlocked: (user?.level || 1) >= 2,
+                  icon: "⛰️",
+                },
+                {
+                  title: "Bug Squash Commando",
+                  desc: "Accumulated 300+ XP",
+                  unlocked: (user?.points || 0) >= 300,
+                  icon: "🐞",
+                },
+                {
+                  title: "Financial Architect",
+                  desc: "Accumulated 1000+ XP",
+                  unlocked: (user?.points || 0) >= 1000,
+                  icon: "🏦",
+                },
+                {
+                  title: "Ledger Sentinel",
+                  desc: "Manager or Admin role",
+                  unlocked: user?.role === "Manager" || user?.role === "Admin",
+                  icon: "🛡️",
+                },
+              ].map((badge, idx) => (
+                <div
+                  key={idx}
+                  className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all duration-300 ${
+                    badge.unlocked
+                      ? "border-neon-violet/20 bg-neon-violet/5 text-slate-200"
+                      : "border-slate-900/60 bg-slate-950/40 opacity-45"
+                  }`}
+                >
+                  <div
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                      badge.unlocked
+                        ? "bg-neon-violet/10 border border-neon-violet/20"
+                        : "bg-slate-900 border border-slate-800"
+                    }`}
+                  >
+                    {badge.icon}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-bold truncate">{badge.title}</span>
+                    <span className="text-[9px] text-slate-400 font-mono truncate">{badge.desc}</span>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-bold text-slate-200">Cyber Overlord</span>
-                  <span className="text-[9px] text-slate-400 uppercase tracking-wider leading-none">Reach Level 10</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3.5 p-3 rounded-xl bg-slate-950/40 border border-slate-900/80 opacity-50">
-                <div className="w-9 h-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 font-bold text-xs">
-                  🏆
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-bold text-slate-400">Expense Master</span>
-                  <span className="text-[9px] text-slate-500 uppercase tracking-wider leading-none">10 approved expenses</span>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-900/60 flex items-center justify-between text-xs text-slate-500">
-            <span className="flex items-center gap-1.5"><TrendingUp className="w-4 h-4 text-neon-emerald" /> Progress Tracker Active</span>
+          <div className="mt-4 pt-3 border-t border-slate-900/60 flex items-center justify-between text-xs text-slate-500 font-mono">
+            <span className="flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-neon-emerald" /> Radar Active</span>
+            <span className="text-[10px] text-neon-emerald font-bold uppercase">Live Sync</span>
           </div>
         </Card>
       </div>

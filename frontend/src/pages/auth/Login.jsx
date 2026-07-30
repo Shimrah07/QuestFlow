@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import Card from "../../components/common/Card";
 import Spinner from "../../components/common/Spinner";
-import { Mail, Lock, LogIn, KeyRound, Sparkles, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, LogIn, Eye, EyeOff } from "lucide-react";
 
 const Login = () => {
   const { login, logout, loading } = useAuth();
@@ -51,12 +51,13 @@ const Login = () => {
 
       <div className="flex flex-col gap-6">
         {/* Header Branding */}
-        <div className="text-center">
-          <h2 className="font-display font-extrabold text-2xl tracking-wide text-slate-100">
-            SECURE ACCESS PORTAL
+        <div className="text-center flex flex-col items-center">
+          <img src="/logo.svg" alt="QuestFlow Logo" className="w-12 h-12 object-contain mb-3" />
+          <h2 className="font-display font-extrabold text-2xl tracking-wide text-slate-100 uppercase">
+            Sign In to QuestFlow
           </h2>
-          <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">
-            Establish Secure Operations Session
+          <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider font-mono">
+            Enter your credentials to access your workspace
           </p>
         </div>
 
@@ -106,7 +107,7 @@ const Login = () => {
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
               <input
                 type="email"
-                placeholder="developer@gmail.com"
+                placeholder={selectedRole === "Admin" ? "admin@gmail.com" : selectedRole === "Manager" ? "manager@gmail.com" : "employee@gmail.com"}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}

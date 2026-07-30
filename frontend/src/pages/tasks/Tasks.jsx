@@ -7,7 +7,7 @@ import { useToast } from "../../context/ToastContext";
 import { ListTodo, CheckCircle, Flame, Sparkles, User, Folder, Plus, X, ArrowRight, Edit2, Eye, Trash2 } from "lucide-react";
 
 const Tasks = () => {
-  const { user } = useAuth();
+  const { user, refreshUserProfile } = useAuth();
   const { showToast } = useToast();
 
   const [tasks, setTasks] = useState([]);
@@ -35,8 +35,19 @@ const Tasks = () => {
   const isManager = user?.role === "Manager";
   const isAdmin = user?.role === "Admin";
   const canAssign = isAdmin || isManager;
-  const canUpdate = isAdmin || isEmployee || isManager;
   const canDelete = isAdmin || isManager;
+
+  const canStartTask = (task) => {
+    if (isAdmin || isManager) return true;
+    if (isEmployee) return task.assigned_to_id === user?.id;
+    return false;
+  };
+
+  const canCompleteTask = (task) => {
+    if (isAdmin || isManager) return true;
+    if (isEmployee) return task.assigned_to_id === user?.id;
+    return false;
+  };
 
   const fetchData = async () => {
     try {
@@ -105,6 +116,9 @@ const Tasks = () => {
 
     try {
       setSubmitting(true);
+      const isCompleting = status === "Completed" && selectedTask.status !== "Completed";
+      const oldLevel = user?.level || 1;
+
       const response = await api.put(`/tasks/${selectedTask.id}`, {
         title,
         description,
@@ -114,12 +128,22 @@ const Tasks = () => {
         status,
       });
 
-      showToast("Task updated successfully.", "success");
       setTasks((prev) =>
         prev.map((t) => (t.id === selectedTask.id ? response.data : t))
       );
       setShowEditModal(false);
       resetForm();
+
+      if (isCompleting && selectedTask.assigned_to_id === user?.id) {
+        const freshUser = await refreshUserProfile();
+        const newLevel = freshUser?.level || oldLevel;
+        showToast(`Operation Completed! +${selectedTask.xp} XP earned! ⚡`, "success");
+        if (newLevel > oldLevel) {
+          showToast(`LEVEL UP! You reached Level ${newLevel}! 🎉`, "success");
+        }
+      } else {
+        showToast("Task updated successfully.", "success");
+      }
     } catch (error) {
       showToast(error.response?.data?.detail || "Failed to update task.", "error");
     } finally {
@@ -154,15 +178,29 @@ const Tasks = () => {
   };
 
   const handleUpdateStatus = async (taskId, newStatus) => {
+    const targetTask = tasks.find((t) => t.id === taskId);
+    const oldLevel = user?.level || 1;
+    const isCompleting = newStatus === "Completed" && targetTask && targetTask.status !== "Completed";
+
     try {
       const response = await api.put(`/tasks/${taskId}/status`, {
         status: newStatus,
       });
-      showToast(`Task status shifted to '${newStatus}'.`, "success");
-      
+
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, status: response.data.status } : t))
       );
+
+      if (isCompleting && targetTask?.assigned_to_id === user?.id) {
+        const freshUser = await refreshUserProfile();
+        const newLevel = freshUser?.level || oldLevel;
+        showToast(`Operation Completed! +${targetTask.xp} XP earned! ⚡`, "success");
+        if (newLevel > oldLevel) {
+          showToast(`LEVEL UP! You reached Level ${newLevel}! 🎉`, "success");
+        }
+      } else {
+        showToast(`Task status shifted to '${newStatus}'.`, "success");
+      }
     } catch (error) {
       showToast(error.response?.data?.detail || "Failed to shift task status.", "error");
     }
@@ -265,8 +303,9 @@ const Tasks = () => {
                         <span className="flex items-center gap-1"><User className="w-3 h-3" /> {task.assigned_to.first_name}</span>
                       )}
                     </div>
-                    {canUpdate && (
+                    {canStartTask(task) && (
                       <button
+                        data-testid="task-start"
                         onClick={() => handleUpdateStatus(task.id, "In Progress")}
                         className="w-full mt-1 py-1 rounded bg-neon-violet/10 hover:bg-neon-violet hover:text-white border border-neon-violet/20 flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-wider transition-all"
                       >
@@ -332,8 +371,9 @@ const Tasks = () => {
                         <span className="flex items-center gap-1"><User className="w-3 h-3" /> {task.assigned_to.first_name}</span>
                       )}
                     </div>
-                    {canUpdate && (
+                    {canCompleteTask(task) && (
                       <button
+                        data-testid="task-complete"
                         onClick={() => handleUpdateStatus(task.id, "Completed")}
                         className="w-full mt-1 py-1 rounded bg-neon-emerald/10 hover:bg-neon-emerald hover:text-white border border-neon-emerald/20 flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-wider transition-all"
                       >

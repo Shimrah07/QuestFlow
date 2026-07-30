@@ -16,7 +16,7 @@ class Settings(BaseModel):
     Application configurations validated using Pydantic v2.
     Requires environment variables for security keys.
     """
-    PROJECT_NAME: str = Field(default=os.getenv("PROJECT_NAME", "Gamified Task & Expense Management System"))
+    PROJECT_NAME: str = Field(default=os.getenv("PROJECT_NAME", "QuestFlow"))
     API_V1_STR: str = Field(default=os.getenv("API_V1_STR", "/api/v1"))
     ENVIRONMENT: str = Field(default=os.getenv("ENVIRONMENT", "development"))
 

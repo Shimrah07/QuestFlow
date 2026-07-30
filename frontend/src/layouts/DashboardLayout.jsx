@@ -37,8 +37,13 @@ const DashboardLayout = () => {
         <Navbar pageTitle={getPageTitle()} />
 
         {/* Inner workspace viewport container */}
-        <main className="flex-1 p-6 md:p-8 overflow-y-auto max-h-[calc(100vh-64px)]">
-          <Outlet />
+        <main className="flex-1 p-6 md:p-8 overflow-y-auto max-h-[calc(100vh-64px)] flex flex-col justify-between">
+          <div>
+            <Outlet />
+          </div>
+          <footer className="mt-8 pt-4 border-t border-slate-900/60 text-center text-[10px] text-slate-500 font-mono">
+            © 2026 QuestFlow • Complete Tasks. Earn Progress. Stay Motivated.
+          </footer>
         </main>
       </div>
     </div>

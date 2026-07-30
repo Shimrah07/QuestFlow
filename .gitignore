@@ -5,26 +5,30 @@ backend/venv/
 *.pyo
 *.pyd
 .env
+.env.*
 *.egg-info/
 .pytest_cache/
 
-# Node
+# Node & Dependencies
+node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+dist/
+coverage/
 
-# IDE
-.vscode/*
-!.vscode/settings.json
+# Testing Reports & Artifacts
+playwright-report/
+test-results/
+blob-report/
+
+# IDE & Editor
+.vscode/
 .idea/
 
-# OS
+# OS & Logs
 .DS_Store
 Thumbs.db
-
-# Logs
 *.log
 npm-debug.log*
-
-# Build artifacts
-*.pyc
+yarn-debug.log*

@@ -24,14 +24,11 @@ const AuthLayout = () => {
 
       {/* Left Pane - Cinematic Cyberpunk Branding (Hidden on Small Screens) */}
       <div className="hidden lg:flex lg:w-1/2 p-12 flex-col justify-between relative border-r border-slate-900/50 bg-slate-950/40 backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-neon-violet/10 border border-neon-violet/30 flex items-center justify-center">
-            <Cpu className="w-5 h-5 text-neon-violet" />
-          </div>
-          <span className="font-display font-bold text-xs uppercase tracking-wider text-slate-100 neon-text-violet">
-            Gamified Task & Expense Management System
+        <div className="flex items-center gap-3">
+          <img src="/logo.svg" alt="QuestFlow Logo" className="w-10 h-10 object-contain" />
+          <span className="font-display font-extrabold text-lg uppercase tracking-wider text-slate-100 neon-text-violet">
+            QuestFlow
           </span>
-
         </div>
 
         <div className="flex flex-col gap-6 max-w-md">
@@ -40,18 +37,18 @@ const AuthLayout = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
           >
-            <span className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-widest text-neon-violet bg-neon-violet/10 border border-neon-violet/25">
-              Protocol v2.10
+            <span className="px-3.5 py-1 rounded-full text-xs font-semibold uppercase tracking-widest text-neon-violet bg-neon-violet/10 border border-neon-violet/25">
+              Welcome to QuestFlow
             </span>
           </motion.div>
-          
+
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-4xl xl:text-5xl font-display font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-slate-50 via-slate-100 to-neon-violet leading-tight"
           >
-            Gamified Task & Expense Pipeline.
+            Complete Tasks. Earn Progress. Stay Motivated.
           </motion.h1>
 
           <motion.p
@@ -60,11 +57,11 @@ const AuthLayout = () => {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="text-slate-400 text-base leading-relaxed"
           >
-            Optimize workflows, verify employee expense requests with cryptographically secure trails, and level up your engineering output.
+            Manage projects, complete tasks, track expenses, earn XP, unlock achievements, and climb the leaderboard—all from one beautifully designed productivity platform.
           </motion.p>
         </div>
 
-        <div className="flex items-center gap-3 text-slate-500 text-xs">
+        <div className="flex items-center gap-3 text-slate-500 text-xs font-mono">
           <ShieldCheck className="w-4 h-4 text-neon-emerald" />
           <span>Secured with AES-256 and RBAC Protocol</span>
         </div>

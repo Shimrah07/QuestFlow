@@ -86,6 +86,18 @@ class AuthService {
   }
 
   /**
+   * Fetch current user profile details from backend.
+   * @returns {Promise<object>}
+   */
+  static async getMe() {
+    const response = await api.get("/users/me");
+    if (response.data) {
+      localStorage.setItem("cyber_session", JSON.stringify(response.data));
+    }
+    return response.data;
+  }
+
+  /**
    * Retrieve currently stored user session.
    * @returns {object|null}
    */

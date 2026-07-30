@@ -3,13 +3,14 @@ import api from "../../services/api";
 import Card from "../../components/common/Card";
 import Spinner from "../../components/common/Spinner";
 import { useToast } from "../../context/ToastContext";
-import { FolderGit2, PlusCircle, Trash2, Calendar, FileText, Edit2, Eye, X, Archive, Check } from "lucide-react";
+import { FolderGit2, PlusCircle, Trash2, Calendar, FileText, Edit2, Eye, X, Archive, Check, Search } from "lucide-react";
 
 const ManageProjects = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [search, setSearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const { showToast } = useToast();
 
@@ -146,7 +147,8 @@ const ManageProjects = () => {
               </label>
               <input
                 type="text"
-                placeholder="Database Migration"
+                data-testid="project-name-input"
+                placeholder="Project Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={submitting}
@@ -160,6 +162,7 @@ const ManageProjects = () => {
                 Operational Scope / Description
               </label>
               <textarea
+                data-testid="project-description-input"
                 placeholder="Migrate the local MS SQL databases to Azure cloud services..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -171,6 +174,7 @@ const ManageProjects = () => {
 
             <button
               type="submit"
+              data-testid="create-project"
               disabled={submitting}
               className="w-full mt-2 rounded-xl py-3 bg-neon-violet text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-neon-violet/30 hover:bg-neon-violet/90 hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all cursor-pointer disabled:opacity-50"
             >
@@ -189,18 +193,42 @@ const ManageProjects = () => {
 
       {/* Projects List */}
       <div className="lg:col-span-2 flex flex-col gap-6">
-        <div>
-          <span className="text-[10px] font-bold tracking-widest text-slate-500 uppercase">System Registry</span>
-          <h2 className="text-2xl font-display font-extrabold text-slate-100 mt-1">ACTIVE SYSTEM PROJECTS</h2>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <span className="text-[10px] font-bold tracking-widest text-slate-500 uppercase">System Registry</span>
+            <h2 className="text-2xl font-display font-extrabold text-slate-100 mt-1">ACTIVE SYSTEM PROJECTS</h2>
+          </div>
+          {/* Search bar above project list */}
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <input
+              type="text"
+              data-testid="project-search"
+              placeholder="Search projects..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2 pl-9 pr-4 text-xs text-slate-200 focus:outline-none focus:border-neon-violet/50 transition-colors"
+            />
+          </div>
         </div>
 
-        {projects.length === 0 ? (
-          <Card glowColor="none" className="bg-bg-card border-slate-900/60 text-center py-12 text-slate-500">
-            No active project operations found. Initialize one using the setup panel.
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {projects.map((p) => (
+        {(() => {
+          const filteredProjects = projects.filter((p) =>
+            p.name.toLowerCase().includes(search.toLowerCase()) ||
+            (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
+          );
+
+          if (filteredProjects.length === 0) {
+            return (
+              <Card glowColor="none" className="bg-bg-card border-slate-900/60 text-center py-12 text-slate-500">
+                {search.trim() ? "No projects match your search query." : "No active project operations found. Initialize one using the setup panel."}
+              </Card>
+            );
+          }
+
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredProjects.map((p) => (
               <Card key={p.id} glowColor={p.status === "Archived" ? "none" : "violet"} hoverEffect={true} className={`bg-bg-card border-slate-900 flex flex-col justify-between h-52 ${p.status === "Archived" ? "opacity-60" : ""}`}>
                 <div>
                   <div className="flex justify-between items-start">
@@ -223,6 +251,7 @@ const ManageProjects = () => {
                       </button>
                       <button
                         onClick={() => openEditModal(p)}
+                        data-testid="edit-project-btn"
                         title="Edit Project"
                         className="p-1.5 rounded-lg border border-transparent text-slate-500 hover:text-neon-violet hover:bg-neon-violet/10 transition-all cursor-pointer"
                       >
@@ -260,7 +289,8 @@ const ManageProjects = () => {
               </Card>
             ))}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Edit Project Modal */}
@@ -285,6 +315,8 @@ const ManageProjects = () => {
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Project Name</label>
                   <input
                     type="text"
+                    data-testid="edit-project-name-input"
+                    placeholder="Project Name"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-violet/50"
@@ -316,6 +348,7 @@ const ManageProjects = () => {
 
                 <button
                   type="submit"
+                  data-testid="edit-project-submit"
                   disabled={submitting}
                   className="w-full mt-2 rounded-xl py-3 bg-neon-violet text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-neon-violet/30 hover:bg-neon-violet/90 transition-all cursor-pointer disabled:opacity-50"
                 >

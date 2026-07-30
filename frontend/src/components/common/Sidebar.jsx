@@ -64,10 +64,10 @@ const Sidebar = () => {
     },
     {
       to: "/approvals",
-      label: "Review Queues",
+      label: "Approvals",
       icon: FileCheck,
       roles: ["Admin", "Manager"], // Block Employees in RBAC
-      badge: pendingCount > 0 ? (pendingCount > 1 ? `Pending (${pendingCount})` : "Pending") : null,
+      badge: pendingCount > 0 ? `Pending (${pendingCount})` : null,
     },
     {
       to: "/admin/users",
@@ -99,18 +99,20 @@ const Sidebar = () => {
     <aside className="w-64 border-r border-slate-900/60 bg-bg-deep flex flex-col justify-between h-screen sticky top-0">
       {/* Brand Branding Panel */}
       <div className="flex flex-col">
-        <div className="h-16 px-6 border-b border-slate-900/60 flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-neon-violet/10 border border-neon-violet/30 flex items-center justify-center">
-            <Cpu className="w-4 h-4 text-neon-violet" />
+        <div className="h-16 px-6 border-b border-slate-900/60 flex items-center gap-3">
+          <img src="/logo.svg" alt="QuestFlow Logo" className="w-8 h-8 object-contain flex-shrink-0" />
+          <div className="flex flex-col min-w-0">
+            <span className="font-display font-extrabold text-sm tracking-wider text-slate-100 neon-text-violet uppercase leading-tight">
+              QuestFlow
+            </span>
+            <span className="text-[7.5px] font-mono tracking-tight text-slate-400 truncate leading-tight mt-0.5">
+              Complete Tasks. Earn Progress. Stay Motivated.
+            </span>
           </div>
-          <span className="font-display font-bold tracking-wider text-[9px] text-slate-100 neon-text-violet">
-            Gamified Task & Expense Management System
-          </span>
-
         </div>
 
         {/* Navigation list */}
-        <nav className="p-4 flex flex-col gap-1.5 mt-4">
+        <nav className="p-3.5 flex flex-col gap-1.5 mt-2">
           {links
             .filter((link) => link.roles.includes(user?.role))
             .map((link) => {
@@ -120,21 +122,20 @@ const Sidebar = () => {
                   key={link.to}
                   to={link.to}
                   className={({ isActive }) => `
-                    flex items-center justify-between px-4 py-3 rounded-xl border text-xs font-semibold uppercase tracking-wider transition-all group duration-300
-                    ${
-                      isActive
-                        ? "bg-neon-violet/10 border-neon-violet/30 text-neon-violet shadow-[0_0_12px_rgba(139,92,246,0.15)]"
-                        : "bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/30 hover:border-slate-800/40"
+                    flex items-center justify-between px-3 py-2.5 rounded-xl border text-xs font-semibold uppercase tracking-wider transition-all group duration-300 min-w-0
+                    ${isActive
+                      ? "bg-neon-violet/10 border-neon-violet/30 text-neon-violet shadow-[0_0_12px_rgba(139,92,246,0.15)]"
+                      : "bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/30 hover:border-slate-800/40"
                     }
                   `}
                 >
-                  <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4 transition-colors" />
-                    <span>{link.label}</span>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Icon className="w-4 h-4 flex-shrink-0 transition-colors" />
+                    <span className="truncate whitespace-nowrap">{link.label}</span>
                   </div>
-                  
+
                   {link.badge && user?.role !== "Employee" && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-neon-amber/10 border border-neon-amber/20 text-neon-amber uppercase tracking-widest animate-pulse">
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md bg-neon-amber/10 border border-neon-amber/20 text-neon-amber uppercase tracking-wider whitespace-nowrap flex-shrink-0 ml-1.5 animate-pulse">
                       {link.badge}
                     </span>
                   )}
@@ -165,3 +166,4 @@ const Sidebar = () => {
 };
 
 export default Sidebar;
+

@@ -15,12 +15,24 @@ def list_users(db: Session = Depends(get_db), current_user: User = Depends(check
     """
     return db.scalars(select(User)).all()
 
+@router.get("/me", response_model=UserOut)
+def read_current_user(current_user: User = Depends(check_role(["Admin", "Manager", "Employee"]))):
+    """
+    Get current authenticated user profile details.
+    """
+    return current_user
+
 @router.get("/leaderboard", response_model=list[UserOut])
 def get_leaderboard(db: Session = Depends(get_db), current_user: User = Depends(check_role(["Admin", "Manager", "Employee"]))):
     """
     Get system standings sorted by XP/points descending. (All authenticated users)
+    Only active users are included. Secondary tie-breaker is user creation timestamp.
     """
-    return db.scalars(select(User).order_by(User.points.desc())).all()
+    return db.scalars(
+        select(User)
+        .where(User.is_active == True)
+        .order_by(User.points.desc(), User.created_at.asc())
+    ).all()
 
 
 @router.put("/{user_id}/status", response_model=UserOut)

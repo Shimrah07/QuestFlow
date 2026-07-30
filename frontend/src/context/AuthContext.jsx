@@ -70,7 +70,21 @@ export const AuthProvider = ({ children }) => {
     showToast("Session connection terminated.", "info");
   };
 
-  // Refresh current user session details from backend
+  // Refresh current user profile from backend API
+  const refreshUserProfile = async () => {
+    try {
+      const freshUser = await AuthService.getMe();
+      if (freshUser) {
+        setUser(freshUser);
+      }
+      return freshUser;
+    } catch (err) {
+      console.error("Failed to refresh user profile:", err);
+      return null;
+    }
+  };
+
+  // Refresh current user session details manually
   const refreshUserData = (updatedUser) => {
     if (updatedUser) {
       setUser(updatedUser);
@@ -79,7 +93,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUserData }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUserData, refreshUserProfile }}>
       {children}
     </AuthContext.Provider>
   );

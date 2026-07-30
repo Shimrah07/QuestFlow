@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Union
 import bcrypt
@@ -40,6 +41,8 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
     }
     return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.ALGORITHM)
 
+import uuid
+
 def create_refresh_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
     """
     Generate a long-lived refresh JWT for rotating active sessions.
@@ -52,7 +55,8 @@ def create_refresh_token(subject: Union[str, Any], expires_delta: timedelta = No
     to_encode = {
         "exp": expire,
         "sub": str(subject),
-        "type": "refresh"
+        "type": "refresh",
+        "jti": str(uuid.uuid4())
     }
     return jwt.encode(to_encode, settings.JWT_REFRESH_SECRET_KEY, algorithm=settings.ALGORITHM)
 

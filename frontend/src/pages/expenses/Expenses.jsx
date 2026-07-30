@@ -188,6 +188,7 @@ const Expenses = () => {
         </div>
         {canAddExpense && (
           <button
+            data-testid="create-expense-btn"
             onClick={() => {
               resetForm();
               setShowCreateModal(true);
@@ -375,7 +376,8 @@ const Expenses = () => {
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expense Title</label>
                   <input
                     type="text"
-                    placeholder="AWS Hosting Credits"
+                    data-testid="expense-title-input"
+                    placeholder="Expense Title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-rose/50"
@@ -404,8 +406,9 @@ const Expenses = () => {
                       <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                       <input
                         type="number"
+                        data-testid="expense-amount-input"
                         step="0.01"
-                        placeholder="350.00"
+                        placeholder="0.00"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 pl-8 pr-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-rose/50 font-mono"
@@ -418,10 +421,11 @@ const Expenses = () => {
 
                 <button
                   type="submit"
+                  data-testid="expense-submit"
                   disabled={submitting}
                   className="w-full mt-2 rounded-xl py-3.5 bg-neon-rose text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-neon-rose/30 hover:bg-neon-rose/90 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {submitting ? <Spinner size="sm" color="white" /> : <span>Upload Claims</span>}
+                  {submitting ? <Spinner size="sm" color="white" /> : <span>Submit Expense Claim</span>}
                 </button>
               </form>
             </div>
