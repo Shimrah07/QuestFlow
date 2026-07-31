@@ -192,18 +192,18 @@ graph TD
     API -->|Validation| Schemas[Pydantic v2 DTOs]
     API -->|Auth & RBAC| Security[PyJWT & bcrypt]
     API -->|ORM Queries| Models[SQLAlchemy 2.0]
-    Models -->|PyODBC| DB[(MS SQL Server)]
+    Models -->|psycopg2 / pyodbc| DB[(Neon PostgreSQL / MS SQL Server)]
 ```
 
 ---
 
 # 🚀 Production Deployment
 
-- **Frontend:** Vercel
-- **Backend:** Render / Azure App Service
-- **Database:** Azure SQL Server
-- **Environment:** Production Environment Variables
-- **HTTPS Security:** Enabled
+- **Frontend Hosting:** Vercel / Netlify
+- **Backend Service:** Render Web Service (Python + FastAPI)
+- **Production Database:** Neon PostgreSQL Serverless (`postgresql://...`)
+- **Local Dev Database:** MS SQL Server (`mssql+pyodbc://...`) or PostgreSQL
+- **Security Protocols:** HTTPS + JWT Access & Refresh Token Rotation
 
 ---
 

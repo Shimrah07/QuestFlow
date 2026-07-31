@@ -6,6 +6,7 @@ backend/venv/
 *.pyd
 .env
 .env.*
+!.env.example
 *.egg-info/
 .pytest_cache/
 
