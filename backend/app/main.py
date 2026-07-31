@@ -26,7 +26,7 @@ app = FastAPI(
 # Configure CORS to enforce origin restrictions while supporting dev environment
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
