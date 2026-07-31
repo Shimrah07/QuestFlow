@@ -41,6 +41,6 @@ app.include_router(reports_router, prefix=f"{settings.API_V1_STR}/reports", tags
 
 @app.get("/")
 def home():
-    return {"message": "Task Expense Management API"}
+    return {"message": "QuestFlow API"}
 
 Base.metadata.create_all(bind=engine)
