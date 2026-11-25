@@ -4,20 +4,29 @@
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
-  <meta name="theme-color" content="#030712" />
-  <meta name="description" content="QuestFlow is a modern gamified productivity platform that helps teams manage projects, tasks and expenses while rewarding progress with XP, achievements and leaderboards." />
-  <meta name="keywords" content="QuestFlow, task management, expense tracker, gamification, productivity platform, RBAC" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0e0d0c" />
+  <meta name="description" content="QuestFlow helps teams run projects, tasks and expense claims, and rewards finished work with XP, levels and a team leaderboard." />
 
-  <!-- OpenGraph Metadata -->
   <meta property="og:title" content="QuestFlow" />
-  <meta property="og:description" content="Complete Tasks. Earn Progress. Stay Motivated." />
+  <meta property="og:description" content="Run projects, approve expenses and level up your team with XP." />
   <meta property="og:type" content="website" />
 
-  <title>QuestFlow — Complete Tasks. Earn Progress. Stay Motivated.</title>
+  <title>QuestFlow</title>
+
+  <!-- Apply the saved theme before first paint so there is no light/dark flash. -->
+  <script>
+    try {
+      if (localStorage.getItem("theme") === "light") {
+        document.documentElement.classList.remove("dark");
+        document.documentElement.classList.add("light");
+        document.querySelector('meta[name="theme-color"]').setAttribute("content", "#f4f3f1");
+      }
+    } catch (e) {}
+  </script>
 </head>
 
-<body class="bg-bg-dark text-slate-100 font-sans antialiased overflow-x-hidden">
+<body>
   <div id="root"></div>
   <script type="module" src="/src/main.jsx"></script>
 </body>

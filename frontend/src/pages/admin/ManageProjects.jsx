@@ -1,9 +1,29 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  FolderSimple,
+  FolderSimplePlus,
+  MagnifyingGlass,
+  PencilSimple,
+  Archive,
+  Eye,
+  CalendarBlank,
+  Plus,
+} from "@phosphor-icons/react";
 import api from "../../services/api";
-import Card from "../../components/common/Card";
-import Spinner from "../../components/common/Spinner";
 import { useToast } from "../../context/ToastContext";
-import { FolderGit2, PlusCircle, Trash2, Calendar, FileText, Edit2, Eye, X, Archive, Check, Search } from "lucide-react";
+import Card from "../../components/common/Card";
+import Button from "../../components/ui/Button";
+import Field from "../../components/ui/Field";
+import Modal from "../../components/ui/Modal";
+import { TextInput } from "../../components/ui/inputs";
+import {
+  PageHeader,
+  StatusBadge,
+  EmptyState,
+  Skeleton,
+  Segmented,
+  formatDate,
+} from "../../components/ui/primitives";
 
 const ManageProjects = () => {
   const [projects, setProjects] = useState([]);
@@ -11,6 +31,7 @@ const ManageProjects = () => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [submitting, setSubmitting] = useState(false);
   const { showToast } = useToast();
 
@@ -30,15 +51,17 @@ const ManageProjects = () => {
       setLoading(true);
       const response = await api.get("/projects");
       setProjects(response.data);
-    } catch (error) {
-      showToast("Failed to load project database.", "error");
+    } catch {
+      showToast("Couldn't load projects.", "error");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCreateProject = async (e) => {
@@ -51,12 +74,12 @@ const ManageProjects = () => {
         name,
         description,
       });
-      showToast("Project created successfully.", "success");
+      showToast("Project created.", "success");
       setProjects((prev) => [...prev, response.data]);
       setName("");
       setDescription("");
-    } catch (error) {
-      showToast("Failed to create new project.", "error");
+    } catch {
+      showToast("Couldn't create the project.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -88,7 +111,7 @@ const ManageProjects = () => {
       setShowEditModal(false);
       setSelectedProject(null);
     } catch (error) {
-      showToast(error.response?.data?.detail || "Failed to update project.", "error");
+      showToast(error.response?.data?.detail || "Couldn't update the project.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -104,14 +127,14 @@ const ManageProjects = () => {
     try {
       setSubmitting(true);
       const response = await api.delete(`/projects/${selectedProject.id}`);
-      showToast("Project soft-deleted / archived successfully.", "success");
+      showToast("Project archived. Its tasks are kept.", "success");
       setProjects((prev) =>
         prev.map((p) => (p.id === selectedProject.id ? response.data : p))
       );
       setShowArchiveModal(false);
       setSelectedProject(null);
-    } catch (error) {
-      showToast("Failed to archive project.", "error");
+    } catch {
+      showToast("Couldn't archive the project.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -122,326 +145,323 @@ const ManageProjects = () => {
     setShowDetailModal(true);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <Spinner size="lg" color="violet" />
-      </div>
-    );
-  }
+  const counts = useMemo(
+    () => ({
+      All: projects.length,
+      Active: projects.filter((p) => p.status !== "Archived").length,
+      Archived: projects.filter((p) => p.status === "Archived").length,
+    }),
+    [projects]
+  );
+
+  const filteredProjects = projects.filter((p) => {
+    const matchesSearch =
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      (p.description && p.description.toLowerCase().includes(search.toLowerCase()));
+    const matchesStatus =
+      statusFilter === "All" || (statusFilter === "Archived" ? p.status === "Archived" : p.status !== "Archived");
+    return matchesSearch && matchesStatus;
+  });
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      {/* Create project Form */}
-      <div className="flex flex-col gap-6">
-        <div>
-          <span className="text-[10px] font-bold tracking-widest text-neon-violet uppercase">Operations Setup</span>
-          <h1 className="text-2xl font-display font-extrabold text-slate-100 mt-1">INITIALIZE PROJECT</h1>
-        </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Projects" description="Group related tasks. Archived projects keep their task history." />
 
-        <Card glowColor="violet" hoverEffect={false} className="bg-bg-card border-slate-900">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)] xl:grid-cols-[22rem_minmax(0,1fr)]">
+        {/* Create project */}
+        <Card className="lg:sticky lg:top-24">
+          <div className="mb-5 flex items-center gap-2.5">
+            <span className="grid h-8 w-8 place-items-center rounded-[10px] border border-accent/25 bg-accent/10 text-accent-text">
+              <FolderSimplePlus size={17} weight="bold" />
+            </span>
+            <h2 className="text-[0.9375rem] font-semibold text-fg">New project</h2>
+          </div>
           <form onSubmit={handleCreateProject} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Project Name
-              </label>
-              <input
-                type="text"
-                data-testid="project-name-input"
-                placeholder="Project Name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={submitting}
-                className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-3 px-4 text-sm text-slate-200 focus:outline-none focus:border-neon-violet/50 focus:ring-1 focus:ring-neon-violet/10 transition-all"
-                required
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Operational Scope / Description
-              </label>
-              <textarea
-                data-testid="project-description-input"
-                placeholder="Migrate the local MS SQL databases to Azure cloud services..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                disabled={submitting}
-                rows={4}
-                className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-3 px-4 text-sm text-slate-200 focus:outline-none focus:border-neon-violet/50 focus:ring-1 focus:ring-neon-violet/10 transition-all resize-none"
-              />
-            </div>
-
-            <button
-              type="submit"
-              data-testid="create-project"
-              disabled={submitting}
-              className="w-full mt-2 rounded-xl py-3 bg-neon-violet text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-neon-violet/30 hover:bg-neon-violet/90 hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all cursor-pointer disabled:opacity-50"
-            >
-              {submitting ? (
-                <Spinner size="sm" color="white" />
-              ) : (
-                <>
-                  <PlusCircle className="w-4 h-4" />
-                  <span>Deploy Project</span>
-                </>
+            <Field label="Name">
+              {(p) => (
+                <input
+                  {...p}
+                  type="text"
+                  data-testid="project-name-input"
+                  placeholder="Project name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={submitting}
+                  className="control"
+                  required
+                />
               )}
-            </button>
+            </Field>
+            <Field label="Description" optional>
+              {(p) => (
+                <textarea
+                  {...p}
+                  data-testid="project-description-input"
+                  placeholder="What the project covers and when it's done"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  disabled={submitting}
+                  rows={4}
+                  className="control"
+                />
+              )}
+            </Field>
+            <Button
+              type="submit"
+              variant="primary"
+              icon={Plus}
+              loading={submitting}
+              data-testid="create-project"
+              className="w-full"
+            >
+              Create project
+            </Button>
           </form>
         </Card>
-      </div>
 
-      {/* Projects List */}
-      <div className="lg:col-span-2 flex flex-col gap-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <span className="text-[10px] font-bold tracking-widest text-slate-500 uppercase">System Registry</span>
-            <h2 className="text-2xl font-display font-extrabold text-slate-100 mt-1">ACTIVE SYSTEM PROJECTS</h2>
-          </div>
-          {/* Search bar above project list */}
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <input
-              type="text"
-              data-testid="project-search"
-              placeholder="Search projects..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2 pl-9 pr-4 text-xs text-slate-200 focus:outline-none focus:border-neon-violet/50 transition-colors"
+        {/* Project list */}
+        <section aria-labelledby="project-list-heading" className="flex min-w-0 flex-col gap-4">
+          <h2 id="project-list-heading" className="sr-only">All projects</h2>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Segmented
+              ariaLabel="Filter by status"
+              layoutId="project-status-filter"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: "All", label: "All", count: counts.All },
+                { value: "Active", label: "Active", count: counts.Active },
+                { value: "Archived", label: "Archived", count: counts.Archived },
+              ]}
             />
+            <div className="w-full sm:w-64">
+              <TextInput
+                icon={MagnifyingGlass}
+                type="search"
+                data-testid="project-search"
+                aria-label="Search projects"
+                placeholder="Search projects"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="!h-9 !text-sm"
+              />
+            </div>
           </div>
-        </div>
 
-        {(() => {
-          const filteredProjects = projects.filter((p) =>
-            p.name.toLowerCase().includes(search.toLowerCase()) ||
-            (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
-          );
-
-          if (filteredProjects.length === 0) {
-            return (
-              <Card glowColor="none" className="bg-bg-card border-slate-900/60 text-center py-12 text-slate-500">
-                {search.trim() ? "No projects match your search query." : "No active project operations found. Initialize one using the setup panel."}
-              </Card>
-            );
-          }
-
-          return (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredProjects.map((p) => (
-              <Card key={p.id} glowColor={p.status === "Archived" ? "none" : "violet"} hoverEffect={true} className={`bg-bg-card border-slate-900 flex flex-col justify-between h-52 ${p.status === "Archived" ? "opacity-60" : ""}`}>
-                <div>
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-2 rounded-lg bg-neon-violet/10 border border-neon-violet/20 text-neon-violet">
-                        <FolderGit2 className="w-4.5 h-4.5" />
-                      </div>
-                      <span className="text-xs font-extrabold text-slate-200 uppercase tracking-wide truncate max-w-[120px]">
-                        {p.name}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => openDetailModal(p)}
-                        title="View Details"
-                        className="p-1.5 rounded-lg border border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-900 transition-all cursor-pointer"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => openEditModal(p)}
-                        data-testid="edit-project-btn"
-                        title="Edit Project"
-                        className="p-1.5 rounded-lg border border-transparent text-slate-500 hover:text-neon-violet hover:bg-neon-violet/10 transition-all cursor-pointer"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      {p.status !== "Archived" && (
-                        <button
-                          onClick={() => openArchiveModal(p)}
-                          title="Archive Project"
-                          className="p-1.5 rounded-lg border border-transparent text-slate-500 hover:text-neon-rose hover:bg-neon-rose/10 transition-all cursor-pointer"
-                        >
-                          <Archive className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
+          {loading ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Card key={i} className="flex flex-col gap-4">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-9 w-9" />
+                    <Skeleton className="h-4 w-40" />
                   </div>
-
-                  <p className="text-[11px] text-slate-400 leading-relaxed mt-4 line-clamp-3">
-                    {p.description || "No operational scope description provided."}
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-between pt-3 border-t border-slate-900/50 text-[9px] font-mono text-slate-500">
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3" /> Created: {new Date(p.created_at).toLocaleDateString()}
-                  </span>
-                  <span className={`px-1.5 py-0.5 rounded uppercase tracking-widest font-bold border ${
-                    p.status === "Archived" 
-                      ? "bg-slate-900 border-slate-800 text-slate-500" 
-                      : "bg-neon-emerald/10 border-neon-emerald/20 text-neon-emerald"
-                  }`}>
-                    {p.status}
-                  </span>
-                </div>
-              </Card>
-            ))}
-          </div>
-          );
-        })()}
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-2/3" />
+                  <Skeleton className="mt-2 h-8 w-full" />
+                </Card>
+              ))}
+            </div>
+          ) : filteredProjects.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={FolderSimple}
+                title={search.trim() || statusFilter !== "All" ? "No matching projects" : "No projects yet"}
+                description={
+                  search.trim() || statusFilter !== "All"
+                    ? "Try a different search or status filter."
+                    : "Create your first project with the form on this page."
+                }
+                action={
+                  (search.trim() || statusFilter !== "All") && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setSearch("");
+                        setStatusFilter("All");
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  )
+                }
+              />
+            </Card>
+          ) : (
+            <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {filteredProjects.map((p) => {
+                const archived = p.status === "Archived";
+                return (
+                  <li key={p.id} className="min-w-0">
+                    <Card
+                      padding="p-0"
+                      interactive
+                      className={`flex h-full flex-col ${archived ? "bg-surface/60" : ""}`}
+                    >
+                      <div className="flex flex-1 flex-col p-5">
+                        <div className="flex items-start gap-3">
+                          <span
+                            className={`grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border ${
+                              archived ? "border-line bg-surface-2 text-fg-subtle" : "border-accent/25 bg-accent/10 text-accent-text"
+                            }`}
+                          >
+                            <FolderSimple size={18} weight={archived ? "regular" : "fill"} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <h3 className={`truncate text-[0.9375rem] font-semibold ${archived ? "text-fg-muted" : "text-fg"}`} title={p.name}>
+                              {p.name}
+                            </h3>
+                            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-fg-subtle">
+                              <CalendarBlank size={12} />
+                              Created {formatDate(p.created_at, { month: "short", day: "numeric", year: "numeric" })}
+                            </p>
+                          </div>
+                          <StatusBadge status={p.status} className="shrink-0" />
+                        </div>
+                        <p className={`mt-3.5 line-clamp-3 text-sm leading-relaxed ${p.description ? "text-fg-muted" : "italic text-fg-subtle"}`}>
+                          {p.description || "No description"}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-end gap-1 border-t border-line px-3 py-2">
+                        <Button variant="ghost" size="sm" icon={Eye} onClick={() => openDetailModal(p)} title="View details">
+                          Details
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={PencilSimple}
+                          onClick={() => openEditModal(p)}
+                          data-testid="edit-project-btn"
+                          title="Edit project"
+                        >
+                          Edit
+                        </Button>
+                        {!archived && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={Archive}
+                            onClick={() => openArchiveModal(p)}
+                            title="Archive project"
+                            data-testid="archive-project-btn"
+                            className="hover:!text-danger"
+                          >
+                            Archive
+                          </Button>
+                        )}
+                      </div>
+                    </Card>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
       </div>
 
       {/* Edit Project Modal */}
-      {showEditModal && selectedProject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-bg-card border border-slate-800 rounded-2xl shadow-2xl relative">
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-neon-violet to-neon-emerald" />
-            
-            <div className="p-6 flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-display font-extrabold text-lg text-slate-100 uppercase tracking-wider">Edit Project</h3>
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="p-1 rounded-lg border border-transparent text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleUpdateProject} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Project Name</label>
-                  <input
-                    type="text"
-                    data-testid="edit-project-name-input"
-                    placeholder="Project Name"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-violet/50"
-                    required
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operational Scope</label>
-                  <textarea
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    rows={3}
-                    className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-violet/50 resize-none"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operational Status</label>
-                  <select
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-xs text-slate-300 focus:outline-none focus:border-neon-violet/50 cursor-pointer"
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Archived">Archived</option>
-                  </select>
-                </div>
-
-                <button
-                  type="submit"
-                  data-testid="edit-project-submit"
-                  disabled={submitting}
-                  className="w-full mt-2 rounded-xl py-3 bg-neon-violet text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-neon-violet/30 hover:bg-neon-violet/90 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {submitting ? <Spinner size="sm" color="white" /> : <span>Update Project</span>}
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showEditModal && !!selectedProject}
+        onClose={() => setShowEditModal(false)}
+        title="Edit project"
+        testId="edit-project-modal"
+        footer={
+          <>
+            <Button onClick={() => setShowEditModal(false)}>Cancel</Button>
+            <Button type="submit" form="edit-project-form" variant="primary" loading={submitting} data-testid="edit-project-submit">
+              Save changes
+            </Button>
+          </>
+        }
+      >
+        <form id="edit-project-form" onSubmit={handleUpdateProject} className="flex flex-col gap-4">
+          <Field label="Name">
+            {(p) => (
+              <input
+                {...p}
+                type="text"
+                data-testid="edit-project-name-input"
+                placeholder="Project name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="control"
+                required
+              />
+            )}
+          </Field>
+          <Field label="Description" optional>
+            {(p) => (
+              <textarea
+                {...p}
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                rows={3}
+                className="control"
+              />
+            )}
+          </Field>
+          <Field label="Status">
+            {(p) => (
+              <select {...p} value={editStatus} onChange={(e) => setEditStatus(e.target.value)} className="control">
+                <option value="Active">Active</option>
+                <option value="Archived">Archived</option>
+              </select>
+            )}
+          </Field>
+        </form>
+      </Modal>
 
       {/* Detail Project Modal */}
-      {showDetailModal && selectedProject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-bg-card border border-slate-800 rounded-2xl shadow-2xl relative">
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-neon-violet to-neon-emerald" />
-            
-            <div className="p-6 flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <FolderGit2 className="w-5 h-5 text-neon-violet" />
-                  <h3 className="font-display font-extrabold text-base text-slate-100 uppercase tracking-wider">{selectedProject.name}</h3>
-                </div>
-                <button
-                  onClick={() => setShowDetailModal(false)}
-                  className="p-1 rounded-lg text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="flex flex-col gap-3 text-xs text-slate-300 border-t border-b border-slate-900/80 py-4 font-mono">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Project Identifier:</span>
-                  <span className="font-bold text-slate-200">PRJ-{selectedProject.id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Status:</span>
-                  <span className="font-bold text-neon-emerald">{selectedProject.status}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Created Date:</span>
-                  <span className="text-slate-300">{new Date(selectedProject.created_at).toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operational Scope</span>
-                <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-3 rounded-xl border border-slate-900">
-                  {selectedProject.description || "No detailed scope specified."}
-                </p>
-              </div>
-
-              <button
-                onClick={() => setShowDetailModal(false)}
-                className="w-full mt-2 rounded-xl py-2.5 bg-slate-900 text-slate-300 font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all cursor-pointer"
-              >
-                Close View
-              </button>
+      <Modal
+        open={showDetailModal && !!selectedProject}
+        onClose={() => setShowDetailModal(false)}
+        title={selectedProject?.name}
+        footer={<Button onClick={() => setShowDetailModal(false)}>Close</Button>}
+      >
+        {selectedProject && (
+          <div className="flex flex-col gap-5">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
+              <dt className="text-fg-subtle">Project ID</dt>
+              <dd className="num text-right text-fg">PRJ-{selectedProject.id}</dd>
+              <dt className="text-fg-subtle">Status</dt>
+              <dd className="text-right">
+                <StatusBadge status={selectedProject.status} />
+              </dd>
+              <dt className="text-fg-subtle">Created</dt>
+              <dd className="text-right text-fg">{new Date(selectedProject.created_at).toLocaleString()}</dd>
+            </dl>
+            <div>
+              <p className="field-label">Description</p>
+              <p className={`rounded-[10px] border border-line bg-bg-sunken p-3.5 text-sm leading-relaxed ${selectedProject.description ? "text-fg-muted" : "italic text-fg-subtle"}`}>
+                {selectedProject.description || "No description"}
+              </p>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* Archive Confirmation Modal */}
-      {showArchiveModal && selectedProject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-bg-card border border-slate-800 rounded-2xl shadow-2xl p-6 flex flex-col gap-4 text-center">
-            <div className="w-12 h-12 rounded-full bg-neon-rose/10 border border-neon-rose/20 text-neon-rose flex items-center justify-center mx-auto text-xl font-bold">
-              <Archive className="w-6 h-6" />
-            </div>
-            <h3 className="font-display font-extrabold text-slate-100 text-base uppercase tracking-wider">Archive Project?</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Are you sure you want to soft-delete / archive <span className="text-slate-200 font-bold">"{selectedProject.name}"</span>? The project status will be marked as Archived to preserve task data integrity.
-            </p>
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => setShowArchiveModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-300 text-xs font-bold uppercase tracking-wider hover:bg-slate-800 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleArchiveProject}
-                disabled={submitting}
-                className="flex-1 py-2.5 rounded-xl border border-neon-rose/30 bg-neon-rose text-white text-xs font-bold uppercase tracking-wider hover:bg-neon-rose/90 cursor-pointer disabled:opacity-50"
-              >
-                {submitting ? <Spinner size="sm" color="white" /> : "Confirm Archive"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showArchiveModal && !!selectedProject}
+        onClose={() => setShowArchiveModal(false)}
+        size="sm"
+        title="Archive this project?"
+        footer={
+          <>
+            <Button onClick={() => setShowArchiveModal(false)}>Cancel</Button>
+            <Button variant="danger" icon={Archive} onClick={handleArchiveProject} loading={submitting} data-testid="confirm-archive-project">
+              Archive project
+            </Button>
+          </>
+        }
+      >
+        {selectedProject && (
+          <p className="text-sm leading-relaxed text-fg-muted">
+            <span className="font-semibold text-fg">{selectedProject.name}</span> will be marked as archived. Its tasks
+            stay in place, and you can make it active again from Edit.
+          </p>
+        )}
+      </Modal>
     </div>
   );
 };

@@ -28,6 +28,7 @@ export const ThemeProvider = ({ children }) => {
       root.classList.add("dark");
       localStorage.setItem("theme", "dark");
     }
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#f4f3f1" : "#0e0d0c");
   }, [theme]);
 
   const toggleTheme = () => {

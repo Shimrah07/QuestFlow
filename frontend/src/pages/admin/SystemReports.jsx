@@ -1,9 +1,110 @@
-import React, { useEffect, useState } from "react";
+/*
+ * Reports: "How is the workspace doing?"
+ * Deviations from dashboard-design defaults, on purpose:
+ * - No deltas: /reports/summary has no previous period, so no baseline is invented.
+ * - Pending claims is the only "needs attention" tile; it carries the accent and its action (Review).
+ * - Shares are drawn as length (segmented bar + slim 3px row bars), not a pie.
+ */
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { UsersThree, FolderSimple, CheckCircle, Receipt, ArrowRight, ChartBar } from "@phosphor-icons/react";
 import api from "../../services/api";
-import Card from "../../components/common/Card";
-import Spinner from "../../components/common/Spinner";
 import { useToast } from "../../context/ToastContext";
-import { BarChart3, TrendingUp, DollarSign, CheckCircle2, Users, FolderGit2 } from "lucide-react";
+import Card from "../../components/common/Card";
+import { PageHeader, Skeleton, EmptyState, formatMoney } from "../../components/ui/primitives";
+
+const pct = (part, total) => (total > 0 ? (part / total) * 100 : 0);
+const pctLabel = (part, total) => {
+  if (!total) return "-";
+  const v = pct(part, total);
+  return v > 0 && v < 0.1 ? "<0.1%" : `${Math.round(v)}%`;
+};
+
+const KpiTile = ({ label, icon: Icon, value, sub, attention = false, action }) => (
+  <Card padding="p-5" className={`flex min-w-0 flex-col ${attention ? "border-accent/35" : ""}`}>
+    <div className="flex items-center justify-between gap-3">
+      <span className="truncate text-[0.8125rem] font-medium text-fg-muted">{label}</span>
+      <span
+        className={`grid h-8 w-8 shrink-0 place-items-center rounded-[10px] border ${
+          attention ? "border-accent/30 bg-accent/10 text-accent-text" : "border-line bg-surface-2 text-fg-subtle"
+        }`}
+      >
+        <Icon size={16} weight="bold" />
+      </span>
+    </div>
+    <span className="num mt-3 truncate text-[1.75rem] font-semibold leading-none tracking-tight text-fg">{value}</span>
+    <div className="mt-2.5 flex min-h-5 items-center justify-between gap-2 text-xs text-fg-subtle">
+      <span className="truncate">{sub}</span>
+      {action}
+    </div>
+  </Card>
+);
+
+/** One horizontal bar split into segments; length encodes share. */
+const ShareBar = ({ segments, total, label }) => (
+  <div className="flex h-2.5 w-full gap-[3px] overflow-hidden rounded-full" role="img" aria-label={label}>
+    {total > 0 ? (
+      segments
+        .filter((s) => s.value > 0)
+        .map((s) => (
+          <span
+            key={s.key}
+            className="h-full first:rounded-l-full last:rounded-r-full transition-[flex-grow] duration-700"
+            style={{ flexGrow: s.value, flexBasis: 0, background: s.color }}
+            title={`${s.label}: ${s.display}`}
+          />
+        ))
+    ) : (
+      <span className="h-full w-full rounded-full bg-surface-3" />
+    )}
+  </div>
+);
+
+const BreakdownRow = ({ color, label, display, share, value, total }) => (
+  <li className="relative py-3">
+    <div className="flex items-center gap-3 text-sm">
+      <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: color }} aria-hidden />
+      <span className="min-w-0 flex-1 truncate text-fg-muted">{label}</span>
+      <span className="num w-12 text-right text-xs text-fg-subtle">{share}</span>
+      <span className="num min-w-[5.5rem] text-right font-medium text-fg">{display}</span>
+    </div>
+    <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-surface-2" aria-hidden>
+      <span
+        className="block h-full rounded-full opacity-70 transition-[width] duration-700"
+        style={{ width: `${pct(value, total)}%`, background: color }}
+      />
+    </span>
+  </li>
+);
+
+const ReportsSkeleton = () => (
+  <>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Card key={i} padding="p-5" className="flex flex-col gap-3">
+          <div className="flex justify-between">
+            <Skeleton className="h-3.5 w-24" />
+            <Skeleton className="h-8 w-8" />
+          </div>
+          <Skeleton className="h-7 w-28" />
+          <Skeleton className="h-3 w-20" />
+        </Card>
+      ))}
+    </div>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {Array.from({ length: 2 }).map((_, i) => (
+        <Card key={i} className="flex flex-col gap-4">
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="h-9 w-32" />
+          <Skeleton className="h-2.5 w-full" />
+          {Array.from({ length: 3 }).map((__, j) => (
+            <Skeleton key={j} className="h-5 w-full" />
+          ))}
+        </Card>
+      ))}
+    </div>
+  </>
+);
 
 const SystemReports = () => {
   const [data, setData] = useState(null);
@@ -16,171 +117,141 @@ const SystemReports = () => {
         setLoading(true);
         const response = await api.get("/reports/summary");
         setData(response.data);
-      } catch (error) {
-        showToast("Failed to fetch system reports data.", "error");
+      } catch {
+        showToast("Couldn't load reports.", "error");
       } finally {
         setLoading(false);
       }
     };
     fetchSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (loading) {
+  if (loading || !data) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Spinner size="lg" color="violet" />
+      <div className="flex flex-col gap-6">
+        <PageHeader title="Reports" />
+        {loading ? (
+          <ReportsSkeleton />
+        ) : (
+          <Card>
+            <EmptyState icon={ChartBar} title="Reports unavailable" description="The summary couldn't be loaded. Refresh to try again." />
+          </Card>
+        )}
       </div>
     );
   }
 
-  const taskCompletionRate = data.tasks.total > 0 
-    ? Math.round((data.tasks.completed / data.tasks.total) * 100) 
+  const taskCompletionRate = data.tasks.total > 0
+    ? Math.round((data.tasks.completed / data.tasks.total) * 100)
     : 0;
 
   const totalExpenseBudget = data.expenses.approved_amount + data.expenses.pending_amount + data.expenses.rejected_amount;
 
+  const taskSegments = [
+    { key: "done", label: "Done", value: data.tasks.completed, color: "var(--success)" },
+    { key: "progress", label: "In progress", value: data.tasks.in_progress, color: "var(--info)" },
+    { key: "todo", label: "To do", value: data.tasks.todo, color: "var(--fg-subtle)" },
+  ].map((s) => ({ ...s, display: s.value.toLocaleString() }));
+
+  const expenseSegments = [
+    { key: "approved", label: "Approved", value: data.expenses.approved_amount, color: "var(--success)" },
+    { key: "pending", label: "Pending", value: data.expenses.pending_amount, color: "var(--accent)" },
+    { key: "rejected", label: "Rejected", value: data.expenses.rejected_amount, color: "var(--danger)" },
+  ].map((s) => ({ ...s, display: formatMoney(s.value) }));
+
   return (
-    <div className="flex flex-col gap-8">
-      <div>
-        <span className="text-[10px] font-bold tracking-widest text-neon-rose uppercase">Data Analytics</span>
-        <h1 className="text-2xl font-display font-extrabold text-slate-100 mt-1">SYSTEM INSIGHTS & REPORTS</h1>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Reports" />
+
+      {/* KPI row */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiTile label="People" icon={UsersThree} value={data.users_count.toLocaleString()} sub="Registered accounts" />
+        <KpiTile label="Projects" icon={FolderSimple} value={data.projects_count.toLocaleString()} sub="Active and archived" />
+        <KpiTile
+          label="Tasks done"
+          icon={CheckCircle}
+          value={data.tasks.total > 0 ? `${taskCompletionRate}%` : "-"}
+          sub={
+            <span className="num">
+              {data.tasks.completed} of {data.tasks.total}
+            </span>
+          }
+        />
+        <KpiTile
+          label="Pending claims"
+          icon={Receipt}
+          value={formatMoney(data.expenses.pending_amount)}
+          sub="Awaiting review"
+          attention={data.expenses.pending_amount > 0}
+          action={
+            data.expenses.pending_amount > 0 && (
+              <Link
+                to="/approvals"
+                className="inline-flex shrink-0 items-center gap-1 font-semibold text-accent-text underline-offset-4 hover:underline"
+              >
+                Review
+                <ArrowRight size={12} weight="bold" />
+              </Link>
+            )
+          }
+        />
       </div>
 
-      {/* Numerical Stats overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card glowColor="violet" className="bg-bg-card border-slate-900 flex items-center justify-between">
-          <div className="flex flex-col gap-1">
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Active Staff Registry</span>
-            <span className="text-2xl font-display font-extrabold text-slate-100">{data.users_count}</span>
+      {/* Breakdowns */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-[0.9375rem] font-semibold text-fg">Tasks by status</h2>
+            <span className="num text-xs text-fg-subtle">{data.tasks.total} total</span>
           </div>
-          <div className="p-2.5 rounded-lg bg-neon-violet/10 border border-neon-violet/20 text-neon-violet">
-            <Users className="w-5 h-5" />
+          <p className="num mt-4 text-[2rem] font-semibold leading-none tracking-tight text-fg">
+            {data.tasks.completed.toLocaleString()}
+            <span className="ml-1.5 text-base font-medium text-fg-subtle">done</span>
+          </p>
+          <div className="mt-5">
+            <ShareBar segments={taskSegments} total={data.tasks.total} label="Task status distribution" />
           </div>
+          <ul className="mt-3">
+            {taskSegments.map((s) => (
+              <BreakdownRow
+                key={s.key}
+                color={s.color}
+                label={s.label}
+                display={s.display}
+                value={s.value}
+                total={data.tasks.total}
+                share={pctLabel(s.value, data.tasks.total)}
+              />
+            ))}
+          </ul>
         </Card>
 
-        <Card glowColor="emerald" className="bg-bg-card border-slate-900 flex items-center justify-between">
-          <div className="flex flex-col gap-1">
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Active Projects</span>
-            <span className="text-2xl font-display font-extrabold text-slate-100">{data.projects_count}</span>
+        <Card>
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-[0.9375rem] font-semibold text-fg">Expense claims by status</h2>
+            <span className="num text-xs text-fg-subtle">{data.expenses.total_count} claims</span>
           </div>
-          <div className="p-2.5 rounded-lg bg-neon-emerald/10 border border-neon-emerald/20 text-neon-emerald">
-            <FolderGit2 className="w-5 h-5" />
+          <p className="num mt-4 truncate text-[2rem] font-semibold leading-none tracking-tight text-fg">
+            {formatMoney(totalExpenseBudget)}
+            <span className="ml-1.5 font-sans text-base font-medium text-fg-subtle">logged</span>
+          </p>
+          <div className="mt-5">
+            <ShareBar segments={expenseSegments} total={totalExpenseBudget} label="Expense amount by status" />
           </div>
-        </Card>
-
-        <Card glowColor="rose" className="bg-bg-card border-slate-900 flex items-center justify-between">
-          <div className="flex flex-col gap-1">
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Paid Out Expenses</span>
-            <span className="text-2xl font-display font-extrabold text-slate-100">${data.expenses.approved_amount.toFixed(2)}</span>
-          </div>
-          <div className="p-2.5 rounded-lg bg-neon-rose/10 border border-neon-rose/20 text-neon-rose">
-            <DollarSign className="w-5 h-5" />
-          </div>
-        </Card>
-
-        <Card glowColor="amber" className="bg-bg-card border-slate-900 flex items-center justify-between">
-          <div className="flex flex-col gap-1">
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Pending Ledger Claims</span>
-            <span className="text-2xl font-display font-extrabold text-slate-100">${data.expenses.pending_amount.toFixed(2)}</span>
-          </div>
-          <div className="p-2.5 rounded-lg bg-neon-amber/10 border border-neon-amber/20 text-neon-amber">
-            <TrendingUp className="w-5 h-5" />
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Task Completions analytics card */}
-        <Card glowColor="violet" hoverEffect={false} className="bg-bg-card border-slate-900">
-          <h3 className="font-display font-bold text-sm tracking-wider uppercase text-slate-200 mb-6 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-neon-violet" /> Task Completion Statistics
-          </h3>
-
-          <div className="flex flex-col gap-6">
-            <div className="flex justify-between items-center bg-slate-950/40 p-4 rounded-xl border border-slate-900/60">
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-500 font-mono uppercase">Completed Nodes Ratio</span>
-                <span className="text-3xl font-display font-extrabold text-slate-200 mt-1">{taskCompletionRate}%</span>
-              </div>
-              <div className="w-24 h-24 rounded-full border-4 border-slate-900 flex items-center justify-center relative">
-                <span className="text-sm font-extrabold font-mono text-neon-violet">{data.tasks.completed}/{data.tasks.total}</span>
-              </div>
-            </div>
-
-            {/* Distribution metrics */}
-            <div className="flex flex-col gap-3 font-mono text-xs">
-              <div className="flex flex-col gap-1">
-                <div className="flex justify-between text-[10px] text-slate-400">
-                  <span>STAGING AREA (TODO)</span>
-                  <span>{data.tasks.todo} Tasks</span>
-                </div>
-                <div className="h-2 rounded bg-slate-950 border border-slate-900 overflow-hidden">
-                  <div className="h-full bg-neon-amber" style={{ width: `${data.tasks.total > 0 ? (data.tasks.todo / data.tasks.total) * 100 : 0}%` }} />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <div className="flex justify-between text-[10px] text-slate-400">
-                  <span>ACTIVE CYCLE (IN PROGRESS)</span>
-                  <span>{data.tasks.in_progress} Tasks</span>
-                </div>
-                <div className="h-2 rounded bg-slate-950 border border-slate-900 overflow-hidden">
-                  <div className="h-full bg-neon-violet" style={{ width: `${data.tasks.total > 0 ? (data.tasks.in_progress / data.tasks.total) * 100 : 0}%` }} />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <div className="flex justify-between text-[10px] text-slate-400">
-                  <span>COMPLETED NODES (COMPLETED)</span>
-                  <span>{data.tasks.completed} Tasks</span>
-                </div>
-                <div className="h-2 rounded bg-slate-950 border border-slate-900 overflow-hidden">
-                  <div className="h-full bg-neon-emerald" style={{ width: `${data.tasks.total > 0 ? (data.tasks.completed / data.tasks.total) * 100 : 0}%` }} />
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Expense financial analytics card */}
-        <Card glowColor="rose" hoverEffect={false} className="bg-bg-card border-slate-900">
-          <h3 className="font-display font-bold text-sm tracking-wider uppercase text-slate-200 mb-6 flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-neon-rose" /> Expense Ledger Distribution
-          </h3>
-
-          <div className="flex flex-col gap-6">
-            <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-900/60 flex flex-col justify-center">
-              <span className="text-[10px] text-slate-500 font-mono uppercase">Total Expense Budget Logged</span>
-              <span className="text-3xl font-display font-extrabold text-slate-200 mt-1">${totalExpenseBudget.toFixed(2)}</span>
-            </div>
-
-            {/* Financial allocation bars */}
-            <div className="flex flex-col gap-4 font-mono text-xs">
-              <div className="flex justify-between items-center py-2.5 px-3 rounded-lg border border-slate-900 bg-slate-950/20">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded bg-neon-emerald" />
-                  <span className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Approved (Disbursed)</span>
-                </div>
-                <span className="font-bold text-slate-200">${data.expenses.approved_amount.toFixed(2)}</span>
-              </div>
-
-              <div className="flex justify-between items-center py-2.5 px-3 rounded-lg border border-slate-900 bg-slate-950/20">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded bg-neon-amber" />
-                  <span className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Pending (In Audit Queue)</span>
-                </div>
-                <span className="font-bold text-slate-200">${data.expenses.pending_amount.toFixed(2)}</span>
-              </div>
-
-              <div className="flex justify-between items-center py-2.5 px-3 rounded-lg border border-slate-900 bg-slate-950/20">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded bg-neon-rose" />
-                  <span className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Rejected (Denied Claims)</span>
-                </div>
-                <span className="font-bold text-slate-200">${data.expenses.rejected_amount.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
+          <ul className="mt-3">
+            {expenseSegments.map((s) => (
+              <BreakdownRow
+                key={s.key}
+                color={s.color}
+                label={s.label}
+                display={s.display}
+                value={s.value}
+                total={totalExpenseBudget}
+                share={pctLabel(s.value, totalExpenseBudget)}
+              />
+            ))}
+          </ul>
         </Card>
       </div>
     </div>

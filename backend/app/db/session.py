@@ -6,6 +6,9 @@ from app.core.config import settings
 db_url = settings.DATABASE_URL
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
+# SQLAlchemy 2.1+ defaults "postgresql://" to psycopg (v3); pin the installed psycopg2 driver
+if db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 # Dialect-specific engine parameters:
 # - MS SQL Server (pyodbc): fast_executemany=True for high-performance bulk operations

@@ -1,23 +1,32 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import Card from "../../components/common/Card";
-import Spinner from "../../components/common/Spinner";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ArrowLeft, EnvelopeSimple, Key, LockSimple, PaperPlaneTilt, ShieldCheck, Check } from "@phosphor-icons/react";
 import AuthService from "../../services/auth";
 import { useToast } from "../../context/ToastContext";
-import { Mail, KeyRound, Lock, ArrowLeft, CheckCircle2, ShieldAlert, Eye, EyeOff } from "lucide-react";
+import Button from "../../components/ui/Button";
+import Field from "../../components/ui/Field";
+import { TextInput, PasswordInput, FormError } from "../../components/ui/inputs";
+
+const STEPS = ["Email", "Code", "New password"];
+
+const errorMessage = (err, fallback) => {
+  const detail = err.response?.data?.detail;
+  return Array.isArray(detail)
+    ? detail.map((d) => d.msg?.replace(/^Value error, /, "") ?? JSON.stringify(d)).join(" | ")
+    : detail || err.message || fallback;
+};
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const reduce = useReducedMotion();
 
   const [step, setStep] = useState(1); // 1: Request OTP, 2: Verify OTP, 3: Reset Password
   const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState("");
   const [generatedCodeHint, setGeneratedCodeHint] = useState("");
@@ -28,27 +37,24 @@ const ForgotPassword = () => {
     setFormError("");
 
     if (!email) {
-      setFormError("Please enter your registered Gmail address.");
+      setFormError("Enter the Gmail address you registered with.");
       return;
     }
 
     const emailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/i;
     if (!emailRegex.test(email)) {
-      setFormError("Only valid Gmail addresses (e.g. user@gmail.com) are allowed.");
+      setFormError("Use a Gmail address, for example name@gmail.com.");
       return;
     }
 
     try {
       setLoading(true);
       const res = await AuthService.forgotPassword(email);
-      showToast(`Verification code sent! (OTP: ${res.otp_code})`, "success");
+      showToast(`Verification code sent (demo code ${res.otp_code}).`, "success");
       setGeneratedCodeHint(res.otp_code);
       setStep(2);
     } catch (err) {
-      const detail = err.response?.data?.detail;
-      const errMsg = Array.isArray(detail)
-        ? detail.map((d) => d.msg?.replace(/^Value error, /, "") ?? JSON.stringify(d)).join(" | ")
-        : detail || err.message || "Failed to request verification code.";
+      const errMsg = errorMessage(err, "Couldn't send a verification code.");
       setFormError(errMsg);
       showToast(errMsg, "error");
     } finally {
@@ -62,20 +68,17 @@ const ForgotPassword = () => {
     setFormError("");
 
     if (!otpCode || otpCode.length !== 6) {
-      setFormError("Please enter the 6-digit verification code.");
+      setFormError("Enter the 6-digit code.");
       return;
     }
 
     try {
       setLoading(true);
       await AuthService.verifyOTP(email, otpCode);
-      showToast("Verification code validated! Set your new password.", "success");
+      showToast("Code verified. Choose a new password.", "success");
       setStep(3);
     } catch (err) {
-      const detail = err.response?.data?.detail;
-      const errMsg = Array.isArray(detail)
-        ? detail.map((d) => d.msg?.replace(/^Value error, /, "") ?? JSON.stringify(d)).join(" | ")
-        : detail || err.message || "Invalid or expired verification code.";
+      const errMsg = errorMessage(err, "That code is invalid or has expired.");
       setFormError(errMsg);
       showToast(errMsg, "error");
     } finally {
@@ -89,31 +92,28 @@ const ForgotPassword = () => {
     setFormError("");
 
     if (!newPassword || !confirmPassword) {
-      setFormError("Please enter and confirm your new secret key.");
+      setFormError("Enter and confirm your new password.");
       return;
     }
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!passwordRegex.test(newPassword)) {
-      setFormError("Password must be at least 8 characters long, contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).");
+      setFormError("Password needs 8+ characters with an uppercase letter, a lowercase letter, a number and one of @$!%*?&.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setFormError("Secret keys do not match.");
+      setFormError("Passwords don't match.");
       return;
     }
 
     try {
       setLoading(true);
       await AuthService.resetPassword(email, otpCode, newPassword);
-      showToast("Secret Key successfully updated! Please log in.", "success");
+      showToast("Password updated. Sign in with your new password.", "success");
       navigate("/login");
     } catch (err) {
-      const detail = err.response?.data?.detail;
-      const errMsg = Array.isArray(detail)
-        ? detail.map((d) => d.msg?.replace(/^Value error, /, "") ?? JSON.stringify(d)).join(" | ")
-        : detail || err.message || "Failed to reset password.";
+      const errMsg = errorMessage(err, "Couldn't reset your password.");
       setFormError(errMsg);
       showToast(errMsg, "error");
     } finally {
@@ -121,235 +121,139 @@ const ForgotPassword = () => {
     }
   };
 
+  const slide = {
+    initial: reduce ? { opacity: 0 } : { opacity: 0, x: 16 },
+    animate: { opacity: 1, x: 0 },
+    exit: reduce ? { opacity: 0 } : { opacity: 0, x: -16 },
+    transition: { duration: 0.24, ease: [0.23, 1, 0.32, 1] },
+  };
+
   return (
-    <Card glowColor="violet" hoverEffect={false} className="w-full relative overflow-hidden bg-bg-card border-neon-violet/10">
-      {/* Header Accent Glow Bar */}
-      <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-neon-violet via-neon-amber to-neon-emerald" />
+    <div>
+      <h1 className="display text-[1.875rem] font-semibold leading-tight text-fg">Reset your password</h1>
+      <p className="mt-2 text-[0.9375rem] text-fg-muted">We'll send a 6-digit code to your email, then you can set a new password.</p>
 
-      <div className="flex flex-col gap-6">
-        {/* Header Title */}
-        <div className="text-center">
-          <h2 className="font-display font-extrabold text-2xl tracking-wide text-slate-100">
-            LOST KEY RECOVERY
-          </h2>
-          <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">
-            {step === 1 && "Step 1: Request Security Verification OTP"}
-            {step === 2 && "Step 2: Enter 6-Digit OTP Code"}
-            {step === 3 && "Step 3: Establish New Secret Key"}
-          </p>
-        </div>
+      {/* Stepper */}
+      <ol className="mt-7 grid grid-cols-3 gap-2" aria-label="Progress">
+        {STEPS.map((label, i) => {
+          const s = i + 1;
+          const done = s < step;
+          const current = s === step;
+          return (
+            <li key={label} aria-current={current ? "step" : undefined} className="flex flex-col gap-2">
+              <span className="relative h-1 overflow-hidden rounded-full bg-surface-3">
+                <span
+                  className="absolute inset-y-0 left-0 rounded-full bg-accent transition-[width] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]"
+                  style={{ width: done || current ? "100%" : "0%" }}
+                />
+              </span>
+              <span className={`flex items-center gap-1.5 text-xs font-medium ${current ? "text-fg" : done ? "text-fg-muted" : "text-fg-subtle"}`}>
+                {done && <Check size={12} weight="bold" className="text-accent-text" />}
+                {label}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
 
-        {/* Step Indicator Progress Bar */}
-        <div className="flex items-center justify-center gap-2">
-          {[1, 2, 3].map((s) => (
-            <div
-              key={s}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                s === step
-                  ? "w-8 bg-neon-violet shadow-[0_0_10px_rgba(139,92,246,0.5)]"
-                  : s < step
-                  ? "w-4 bg-neon-emerald"
-                  : "w-4 bg-slate-900"
-              }`}
-            />
-          ))}
-        </div>
+      <div className="mt-6">
+        <FormError key={formError}>{formError}</FormError>
+      </div>
 
-        {formError && (
-          <div className="p-3 rounded-lg bg-neon-rose/10 border border-neon-rose/30 text-rose-400 text-xs font-semibold text-center animate-shake">
-            {formError}
-          </div>
-        )}
-
+      <AnimatePresence mode="wait" initial={false}>
         {/* STEP 1: Request OTP */}
         {step === 1 && (
-          <form onSubmit={handleRequestOTP} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Registered Gmail Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
-                <input
-                  type="email"
-                  placeholder="admin@gmail.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={loading}
-                  className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-neon-violet/60 focus:ring-1 focus:ring-neon-violet/20 transition-all"
-                  required
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full mt-2 rounded-xl py-3.5 bg-neon-violet text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-neon-violet/30 hover:bg-neon-violet/90 hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all cursor-pointer disabled:opacity-50"
-            >
-              {loading ? (
-                <Spinner size="sm" color="white" />
-              ) : (
-                <>
-                  <KeyRound className="w-4 h-4" />
-                  <span>Send Security OTP</span>
-                </>
+          <motion.form key="s1" {...slide} onSubmit={handleRequestOTP} noValidate className="mt-4 flex flex-col gap-4">
+            <Field label="Registered Gmail address">
+              {(p) => (
+                <TextInput {...p} icon={EnvelopeSimple} type="email" autoComplete="email" placeholder="admin@gmail.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={loading} required />
               )}
-            </button>
-          </form>
+            </Field>
+            <Button type="submit" variant="primary" size="lg" icon={PaperPlaneTilt} loading={loading} className="mt-2 w-full">
+              Send code
+            </Button>
+          </motion.form>
         )}
 
         {/* STEP 2: Verify OTP */}
         {step === 2 && (
-          <form onSubmit={handleVerifyOTP} className="flex flex-col gap-4">
-            <div className="p-3 rounded-xl bg-neon-violet/10 border border-neon-violet/20 flex flex-col gap-1 text-center">
-              <span className="text-[10px] uppercase font-bold text-neon-violet tracking-widest">
-                OTP Code Dispatched
-              </span>
-              <span className="text-xs text-slate-300">
-                Enter the 6-digit OTP code generated for <strong className="text-white font-mono">{email}</strong>
-              </span>
+          <motion.form key="s2" {...slide} onSubmit={handleVerifyOTP} noValidate className="mt-4 flex flex-col gap-4">
+            <div className="rounded-[12px] border border-line bg-surface p-3.5">
+              <p className="text-sm text-fg-muted">
+                Enter the code sent to <span className="font-semibold text-fg break-all">{email}</span>
+              </p>
               {generatedCodeHint && (
-                <div className="mt-1 inline-flex items-center justify-center gap-2">
-                  <span className="text-[11px] text-slate-400">Test OTP Code:</span>
+                <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
+                  <span>Demo code</span>
                   <button
                     type="button"
                     onClick={() => setOtpCode(generatedCodeHint)}
-                    className="px-2 py-0.5 rounded bg-neon-violet/20 text-neon-violet border border-neon-violet/40 font-mono text-xs font-bold hover:bg-neon-violet/30 transition-all cursor-pointer"
+                    className="mono inline-flex items-center gap-1.5 rounded-[6px] border border-accent/30 bg-accent/10 px-2 py-1 text-[0.8125rem] font-semibold tracking-[0.12em] text-accent-text transition-colors hover:bg-accent/20"
                   >
-                    {generatedCodeHint} (Click to Auto-fill)
+                    {generatedCodeHint}
+                    <span className="font-sans text-[0.6875rem] font-medium tracking-normal opacity-80">Use code</span>
                   </button>
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                6-Digit Verification OTP
-              </label>
-              <div className="relative">
-                <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
-                <input
+            <Field label="6-digit code">
+              {(p) => (
+                <TextInput
+                  {...p}
+                  icon={Key}
                   type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
                   maxLength={6}
-                  placeholder="123456"
+                  placeholder="000000"
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
                   disabled={loading}
-                  className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-200 placeholder-slate-600 font-mono tracking-widest text-center focus:outline-none focus:border-neon-violet/60 focus:ring-1 focus:ring-neon-violet/20 transition-all"
+                  className="mono text-center text-lg tracking-[0.5em]"
                   required
                 />
-              </div>
-            </div>
+              )}
+            </Field>
 
-            <div className="flex gap-2 mt-2">
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                disabled={loading}
-                className="flex-1 py-3.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 font-bold text-xs uppercase tracking-wider hover:text-slate-200 cursor-pointer"
-              >
+            <div className="mt-2 grid grid-cols-[auto_1fr] gap-2">
+              <Button variant="secondary" size="lg" icon={ArrowLeft} onClick={() => setStep(1)} disabled={loading}>
                 Back
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-2 py-3.5 rounded-xl bg-neon-violet text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-neon-violet/30 hover:bg-neon-violet/90 transition-all cursor-pointer disabled:opacity-50"
-              >
-                {loading ? <Spinner size="sm" color="white" /> : "Verify Security Code"}
-              </button>
+              </Button>
+              <Button type="submit" variant="primary" size="lg" icon={ShieldCheck} loading={loading}>
+                Verify code
+              </Button>
             </div>
-          </form>
+          </motion.form>
         )}
 
         {/* STEP 3: Set New Password */}
         {step === 3 && (
-          <form onSubmit={handleResetPassword} className="flex flex-col gap-4">
-            {/* New Password input */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                New Secret Key (Min 8 chars)
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  disabled={loading}
-                  className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-3 pl-11 pr-11 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-neon-violet/60 focus:ring-1 focus:ring-neon-violet/20 transition-all"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  tabIndex={-1}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-neon-violet transition-colors cursor-pointer"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Confirm New Password input */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Confirm New Secret Key
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
-                <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={loading}
-                  className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-3 pl-11 pr-11 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-neon-violet/60 focus:ring-1 focus:ring-neon-violet/20 transition-all"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword((v) => !v)}
-                  tabIndex={-1}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-neon-violet transition-colors cursor-pointer"
-                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                >
-                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full mt-2 rounded-xl py-3.5 bg-neon-emerald text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-neon-emerald/30 hover:bg-neon-emerald/90 hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all cursor-pointer disabled:opacity-50"
-            >
-              {loading ? (
-                <Spinner size="sm" color="white" />
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Update Secret Key</span>
-                </>
+          <motion.form key="s3" {...slide} onSubmit={handleResetPassword} noValidate className="mt-4 flex flex-col gap-4">
+            <Field label="New password" hint="8+ characters with upper and lower case, a number and a symbol (@$!%*?&).">
+              {(p) => (
+                <PasswordInput {...p} icon={LockSimple} autoComplete="new-password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} disabled={loading} required />
               )}
-            </button>
-          </form>
+            </Field>
+            <Field label="Confirm new password">
+              {(p) => (
+                <PasswordInput {...p} icon={LockSimple} autoComplete="new-password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} disabled={loading} required />
+              )}
+            </Field>
+            <Button type="submit" variant="primary" size="lg" icon={Check} loading={loading} className="mt-2 w-full">
+              Update password
+            </Button>
+          </motion.form>
         )}
+      </AnimatePresence>
 
-        {/* Back to Login Footer Link */}
-        <div className="text-center text-xs text-slate-500 flex items-center justify-center gap-2 pt-2 border-t border-slate-900">
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <Link
-            to="/login"
-            className="font-bold text-neon-violet hover:underline tracking-wider"
-          >
-            Return to Access Portal
-          </Link>
-        </div>
-      </div>
-    </Card>
+      <p className="mt-8 text-center text-sm">
+        <Link to="/login" className="inline-flex items-center gap-1.5 font-semibold text-fg-muted transition-colors hover:text-fg">
+          <ArrowLeft size={14} weight="bold" />
+          Back to sign in
+        </Link>
+      </p>
+    </div>
   );
 };
 

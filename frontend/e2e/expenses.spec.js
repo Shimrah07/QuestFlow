@@ -27,39 +27,34 @@ test.describe('Expense Management', () => {
     await page.goto('/expenses');
     await page.waitForLoadState('networkidle');
 
-    // Open create expense modal/form
-    const newBtn = page.getByTestId('create-expense-btn').or(page.getByRole('button', { name: /new|submit|add|claim|upload/i })).first();
+    // Open the "New claim" dialog
+    const newBtn = page.getByTestId('create-expense-btn');
     await expect(newBtn).toBeVisible({ timeout: 10000 });
     await newBtn.click();
 
-    // Fill in title
-    const titleInput = page.getByTestId('expense-title-input').or(page.getByPlaceholder(/title|expense name/i)).first();
+    // Fill in title, category and amount
+    const titleInput = page.getByTestId('expense-title-input');
     await expect(titleInput).toBeVisible({ timeout: 10000 });
     const expTitle = `E2E Expense ${Date.now()}`;
     await titleInput.fill(expTitle);
+    await page.getByTestId('expense-category-select').selectOption('Travel');
+    await page.getByTestId('expense-amount-input').fill('75.50');
 
-    // Amount
-    const amountInput = page.getByTestId('expense-amount-input').or(page.getByPlaceholder(/amount|0\.00/i)).first();
-    if (await amountInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await amountInput.fill('75.50');
-    }
-
-    // Submit form inside modal
+    // Submit (button lives in the dialog footer, linked to the form)
     const submitBtn = page.getByTestId('expense-submit');
     await expect(submitBtn).toBeVisible({ timeout: 5000 });
     await submitBtn.click();
 
-    // Wait for create modal to close
-    await expect(page.locator('[role="dialog"]')).not.toBeVisible({ timeout: 8000 }).catch(() => {});
+    // Dialog closes after a successful submit
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0, { timeout: 8000 });
 
-    // Filter/search for the expense title to handle pagination
-    const searchInput = page.getByPlaceholder(/search/i).first();
-    if (await searchInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await searchInput.fill(expTitle);
-    }
+    // Search for the title to get past pagination
+    await page.getByRole('searchbox', { name: 'Search claims' }).fill(expTitle);
 
-    // Expense should appear in list
-    await expect(page.locator('body')).toContainText(expTitle, { timeout: 10000 });
+    // The claim appears as a pending row
+    const row = page.getByTestId('expense-row').filter({ hasText: expTitle });
+    await expect(row).toBeVisible({ timeout: 10000 });
+    await expect(row).toContainText(/pending/i);
   });
 
   test('TC-EXP-03: Employee can submit and then edit a pending expense (API)', async ({ request }) => {
@@ -179,20 +174,124 @@ test.describe('Expense Management', () => {
     await page.waitForLoadState('networkidle');
 
     // Search for the specific expense title to isolate it from pagination
-    const searchInput = page.getByPlaceholder(/search/i).first();
-    if (await searchInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await searchInput.fill(expTitle);
-    }
+    await page.getByRole('searchbox', { name: 'Search claims' }).fill(expTitle);
 
-    // The expense should show "Approved" status
-    await expect(page.locator('body')).toContainText(expTitle, { timeout: 8000 });
-    await expect(page.locator('body')).toContainText(/approved/i, { timeout: 5000 });
+    // The row shows the Approved status
+    const row = page.getByTestId('expense-row').filter({ hasText: expTitle });
+    await expect(row).toBeVisible({ timeout: 8000 });
+    await expect(row).toContainText(/approved/i, { timeout: 5000 });
   });
 
   test('TC-EXP-09: Manager accesses Approvals page and sees pending expenses', async ({ page }) => {
     await loginAs(page, 'Manager');
     await page.goto('/approvals');
     await page.waitForLoadState('networkidle');
-    await expect(page.locator('h1')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('h1')).toHaveText('Approvals', { timeout: 8000 });
+  });
+
+  test('TC-EXP-10: Manager approves an employee claim from the Approvals queue (UI)', async ({ page, request }) => {
+    const empToken = await getToken(request, 'employee');
+    const expTitle = `Queue Approve ${Date.now()}`;
+    await request.post(`${BASE_API}/expenses/`, {
+      data: { title: expTitle, category: 'Meals', amount: 42.0 },
+      headers: { Authorization: `Bearer ${empToken}` },
+    });
+
+    await loginAs(page, 'Manager');
+    await page.goto('/approvals');
+    await page.waitForLoadState('networkidle');
+
+    const item = page.getByTestId('approval-item').filter({ hasText: expTitle });
+    await expect(item).toBeVisible({ timeout: 8000 });
+    await item.getByTestId('approve-btn').click();
+
+    // The claim leaves the queue once approved
+    await expect(item).toHaveCount(0, { timeout: 8000 });
+  });
+
+  test('TC-EXP-11: Employee deletes a pending claim from the list (UI)', async ({ page, request }) => {
+    const empToken = await getToken(request, 'employee');
+    const expTitle = `UI Delete ${Date.now()}`;
+    await request.post(`${BASE_API}/expenses/`, {
+      data: { title: expTitle, category: 'Software', amount: 12.5 },
+      headers: { Authorization: `Bearer ${empToken}` },
+    });
+
+    await loginAs(page, 'Employee');
+    await page.goto('/expenses');
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('searchbox', { name: 'Search claims' }).fill(expTitle);
+
+    const row = page.getByTestId('expense-row').filter({ hasText: expTitle });
+    await expect(row).toBeVisible({ timeout: 8000 });
+    await row.getByTestId('expense-delete').click();
+    await page.getByTestId('confirm-delete').click();
+    await expect(row).toHaveCount(0, { timeout: 8000 });
+  });
+
+  test('TC-EXP-12: Approvals flags a duplicate claim as high risk and explains why (UI)', async ({ page, request }) => {
+    const empToken = await getToken(request, 'employee');
+    const dupTitle = `Duplicate check ${Date.now()}`;
+    for (let i = 0; i < 2; i++) {
+      await request.post(`${BASE_API}/expenses/`, {
+        data: { title: dupTitle, category: 'Meals', amount: 87.4 },
+        headers: { Authorization: `Bearer ${empToken}` },
+      });
+    }
+
+    await loginAs(page, 'Manager');
+    await page.goto('/approvals');
+    await page.waitForLoadState('networkidle');
+
+    const items = page.getByTestId('approval-item').filter({ hasText: dupTitle });
+    await expect(items).toHaveCount(2, { timeout: 8000 });
+    const first = items.first();
+    const badge = first.getByTestId('risk-badge');
+    await expect(badge).toHaveAttribute('data-level', 'high');
+
+    await badge.click();
+    const reasons = first.getByTestId('risk-reasons');
+    await expect(reasons).toContainText('Possible duplicate');
+    await expect(reasons).toContainText(/Same title and amount as EXP-\d+/);
+
+    // Clean up so later runs start from a quiet queue
+    for (let i = 0; i < 2; i++) await items.first().getByTestId('reject-btn').click();
+    await expect(items).toHaveCount(0, { timeout: 8000 });
+  });
+
+  test('TC-EXP-13: Receipt scanner reads a receipt image and fills the claim form (UI, in-browser OCR)', async ({ page, browser }) => {
+    test.setTimeout(120000); // first run downloads the OCR models (~16 MB)
+
+    // Render a receipt and capture it as a PNG, entirely inside the test.
+    const shotCtx = await browser.newContext({ viewport: { width: 520, height: 620 }, deviceScaleFactor: 2 });
+    const shot = await shotCtx.newPage();
+    await shot.setContent(`<body style="margin:0;background:#fff;display:grid;place-items:center;min-height:100vh">
+      <div style="width:360px;padding:24px;font:15px/1.6 'Courier New',monospace;color:#222">
+        <div style="text-align:center;font:800 26px Arial,sans-serif">CITY CAB COMPANY</div>
+        <div style="text-align:center">Trip receipt</div>
+        <div>Date: 14 Nov 2026</div>
+        <div style="display:flex;justify-content:space-between"><span>Base fare</span><span>18.40</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Airport fee</span><span>5.00</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Tax</span><span>1.86</span></div>
+        <div style="display:flex;justify-content:space-between;font-weight:700"><span>TOTAL</span><span>$25.26</span></div>
+      </div></body>`);
+    const receipt = await shot.screenshot({ type: 'png' });
+    await shotCtx.close();
+
+    await loginAs(page, 'Employee');
+    await page.goto('/expenses');
+    await page.waitForLoadState('networkidle');
+    await page.getByTestId('create-expense-btn').click();
+    await page.getByTestId('receipt-file-input').setInputFiles({ name: 'receipt.png', mimeType: 'image/png', buffer: receipt });
+
+    await expect(page.getByTestId('receipt-result')).toBeVisible({ timeout: 90000 });
+    await expect(page.getByTestId('receipt-total')).toContainText('$25.26');
+    await expect(page.getByTestId('receipt-category')).toContainText('Travel');
+
+    await page.getByTestId('receipt-apply').click();
+    await expect(page.getByTestId('receipt-applied')).toBeVisible();
+    await expect(page.getByTestId('expense-amount-input')).toHaveValue('25.26');
+    await expect(page.getByTestId('expense-category-select')).toHaveValue('Travel');
+    await expect(page.getByTestId('expense-title-input')).toHaveValue(/city cab/i);
   });
 });

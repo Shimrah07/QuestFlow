@@ -33,18 +33,18 @@ test.describe('Projects Management', () => {
     await page.waitForLoadState('networkidle');
 
     // Fill in project name using stable testid selector
-    const nameInput = page.getByTestId('project-name-input').or(page.getByPlaceholder(/name|project name/i)).first();
+    const nameInput = page.getByTestId('project-name-input').first();
     await expect(nameInput).toBeVisible({ timeout: 5000 });
     await nameInput.fill(PROJ_NAME);
 
     // Description
-    const descInput = page.getByTestId('project-description-input').or(page.getByPlaceholder(/description/i)).first();
+    const descInput = page.getByTestId('project-description-input').first();
     if (await descInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await descInput.fill('E2E test project description');
     }
 
     // Submit
-    const submitBtn = page.getByTestId('create-project').or(page.getByRole('button', { name: /create|save|submit|deploy/i })).first();
+    const submitBtn = page.getByTestId('create-project').first();
     await submitBtn.click();
 
     // Project should appear in list
@@ -66,13 +66,13 @@ test.describe('Projects Management', () => {
     await page.waitForLoadState('networkidle');
 
     // Filter project list to find the project card
-    const searchInput = page.getByTestId('project-search').or(page.getByPlaceholder(/search/i)).first();
+    const searchInput = page.getByTestId('project-search').first();
     if (await searchInput.isVisible({ timeout: 3000 }).catch(() => false)) {
       await searchInput.fill(project.name);
     }
 
     // Click edit button for the filtered project
-    const editBtn = page.getByTestId('edit-project-btn').or(page.getByTitle(/Edit Project/i)).first();
+    const editBtn = page.getByTestId('edit-project-btn').first();
     await expect(editBtn).toBeVisible({ timeout: 5000 });
     await editBtn.click();
 
@@ -81,15 +81,16 @@ test.describe('Projects Management', () => {
     await expect(modal).toBeVisible({ timeout: 5000 });
 
     // Update name field inside edit modal
-    const nameInput = page.getByTestId('edit-project-name-input').or(page.getByPlaceholder(/name/i)).first();
+    const nameInput = page.getByTestId('edit-project-name-input').first();
     await expect(nameInput).toBeVisible({ timeout: 5000 });
     await nameInput.clear();
     await nameInput.fill(`${project.name} EDITED`);
 
     // Submit edit form
-    const submitBtn = page.getByTestId('edit-project-submit').or(page.getByRole('button', { name: /Update Project|save/i })).first();
+    const submitBtn = page.getByTestId('edit-project-submit').first();
     await submitBtn.click();
-    await expect(page.locator('body')).toContainText(/EDITED|Project updated successfully/i, { timeout: 8000 });
+    await expect(page.locator('body')).toContainText(`${project.name} EDITED`, { timeout: 8000 });
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0, { timeout: 5000 });
   });
 
   test('TC-PROJ-04: Admin can archive (soft-delete) a project', async ({ page, request }) => {
@@ -131,7 +132,7 @@ test.describe('Projects Management', () => {
     await page.waitForLoadState('networkidle');
 
     // Use search input
-    const searchInput = page.getByTestId('project-search').or(page.getByPlaceholder(/search/i)).first();
+    const searchInput = page.getByTestId('project-search').first();
     await expect(searchInput).toBeVisible({ timeout: 5000 });
     await searchInput.fill(uniqueName);
 
@@ -146,5 +147,47 @@ test.describe('Projects Management', () => {
     await page.goto('/admin/projects');
     // Should redirect to dashboard (RBAC guard)
     await expect(page).toHaveURL(/dashboard/, { timeout: 5000 });
+  });
+
+  test('TC-PROJ-07: Admin can archive a project from the UI', async ({ page, request }) => {
+    const token = await getToken(request, 'admin');
+    const createRes = await request.post(`${BASE_API}/projects/`, {
+      data: { name: `UI Archive ${Date.now()}`, description: 'Archive me from the card' },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const project = await createRes.json();
+
+    await loginAs(page, 'Admin');
+    await page.goto('/admin/projects');
+    await page.getByTestId('project-search').fill(project.name);
+
+    const card = page.locator('li', { hasText: project.name });
+    await card.getByTestId('archive-project-btn').click();
+    await expect(page.getByRole('dialog', { name: /archive this project/i })).toBeVisible();
+    await page.getByTestId('confirm-archive-project').click();
+
+    await expect(card.locator('[data-status="Archived"]')).toBeVisible({ timeout: 8000 });
+    await expect(card.getByTestId('archive-project-btn')).toHaveCount(0);
+  });
+
+  test('TC-PROJ-08: Status filter separates active and archived projects', async ({ page, request }) => {
+    const token = await getToken(request, 'admin');
+    const name = `Filter Archived ${Date.now()}`;
+    const createRes = await request.post(`${BASE_API}/projects/`, {
+      data: { name, description: 'Archived for filter test' },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const project = await createRes.json();
+    await request.delete(`${BASE_API}/projects/${project.id}`, { headers: { Authorization: `Bearer ${token}` } });
+
+    await loginAs(page, 'Admin');
+    await page.goto('/admin/projects');
+    await page.getByTestId('project-search').fill(name);
+
+    await page.getByRole('tab', { name: /^Active/ }).click();
+    await expect(page.locator('body')).toContainText(/No matching projects/i, { timeout: 5000 });
+
+    await page.getByRole('tab', { name: /^Archived/ }).click();
+    await expect(page.locator('li', { hasText: name })).toBeVisible({ timeout: 5000 });
   });
 });

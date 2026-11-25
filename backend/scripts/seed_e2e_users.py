@@ -1,4 +1,4 @@
-"""
+r"""
 Seed script for E2E test users.
 Run from the backend directory:
   .\venv\Scripts\python.exe scripts/seed_e2e_users.py

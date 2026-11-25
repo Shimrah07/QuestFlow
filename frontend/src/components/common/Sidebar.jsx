@@ -1,21 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
+import { motion } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
-import {
-  LayoutDashboard,
-  CheckSquare,
-  Receipt,
-  FileCheck,
-  Trophy,
-  ShieldCheck,
-  Cpu,
-  Users,
-  FolderGit2,
-  BarChart3
-} from "lucide-react";
+import { NAV_SECTIONS } from "./navigation";
+import { ProgressRing, XpMeter, levelProgress } from "../ui/primitives";
 
-const Sidebar = () => {
+/**
+ * Left navigation. Rendered inline on desktop and inside a drawer on smaller screens
+ * (DashboardLayout decides which). `onNavigate` lets the drawer close after a click.
+ */
+const Sidebar = ({ onNavigate, idPrefix = "desktop" }) => {
   const { user } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -25,7 +20,7 @@ const Sidebar = () => {
       const response = await api.get("/expenses");
       const pending = response.data.filter((e) => e.status === "Pending");
       setPendingCount(pending.length);
-    } catch (error) {
+    } catch {
       // ignore silently if network fails
     }
   };
@@ -41,129 +36,102 @@ const Sidebar = () => {
       window.removeEventListener("approvals-updated", handleUpdate);
       clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const links = [
-    {
-      to: "/dashboard",
-      label: "Dashboard",
-      icon: LayoutDashboard,
-      roles: ["Admin", "Manager", "Employee"],
-    },
-    {
-      to: "/tasks",
-      label: "Task Operations",
-      icon: CheckSquare,
-      roles: ["Admin", "Manager", "Employee"],
-    },
-    {
-      to: "/expenses",
-      label: "Expense Tracking",
-      icon: Receipt,
-      roles: ["Admin", "Manager", "Employee"],
-    },
-    {
-      to: "/approvals",
-      label: "Approvals",
-      icon: FileCheck,
-      roles: ["Admin", "Manager"], // Block Employees in RBAC
-      badge: pendingCount > 0 ? `Pending (${pendingCount})` : null,
-    },
-    {
-      to: "/admin/users",
-      label: "Manage Users",
-      icon: Users,
-      roles: ["Admin"],
-    },
-    {
-      to: "/admin/projects",
-      label: "Manage Projects",
-      icon: FolderGit2,
-      roles: ["Admin"],
-    },
-    {
-      to: "/admin/reports",
-      label: "System Reports",
-      icon: BarChart3,
-      roles: ["Admin"],
-    },
-    {
-      to: "/gamification",
-      label: "Leaderboards",
-      icon: Trophy,
-      roles: ["Admin", "Manager", "Employee"],
-    },
-  ];
+  const badges = { pending: pendingCount };
+  const points = user?.points || 0;
+  const { inLevel, pct } = levelProgress(points);
 
   return (
-    <aside className="w-64 border-r border-slate-900/60 bg-bg-deep flex flex-col justify-between h-screen sticky top-0">
-      {/* Brand Branding Panel */}
-      <div className="flex flex-col">
-        <div className="h-16 px-6 border-b border-slate-900/60 flex items-center gap-3">
-          <img src="/logo.svg" alt="QuestFlow Logo" className="w-8 h-8 object-contain flex-shrink-0" />
-          <div className="flex flex-col min-w-0">
-            <span className="font-display font-extrabold text-sm tracking-wider text-slate-100 neon-text-violet uppercase leading-tight">
-              QuestFlow
-            </span>
-            <span className="text-[7.5px] font-mono tracking-tight text-slate-400 truncate leading-tight mt-0.5">
-              Complete Tasks. Earn Progress. Stay Motivated.
-            </span>
+    <div className="flex h-full flex-col">
+      {/* Brand */}
+      <div className="flex h-16 shrink-0 items-center gap-2.5 px-5">
+        <img src="/logo.svg" alt="" className="h-7 w-7" />
+        <span className="display text-[1.0625rem] font-semibold text-fg">QuestFlow</span>
+      </div>
+
+      {/* Navigation */}
+      <nav aria-label="Main" className="flex-1 overflow-y-auto scrollbar-none px-3 pb-4">
+        {NAV_SECTIONS.map((section) => {
+          const items = section.items.filter((item) => item.roles.includes(user?.role));
+          if (!items.length) return null;
+          return (
+            <div key={section.label} className="mt-5 first:mt-2">
+              <p className="px-3 pb-1.5 text-[0.71875rem] font-medium text-fg-subtle">{section.label}</p>
+              <ul className="flex flex-col gap-0.5">
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  const count = item.badgeKey ? badges[item.badgeKey] : 0;
+                  return (
+                    <li key={item.to}>
+                      <NavLink
+                        to={item.to}
+                        onClick={onNavigate}
+                        className={({ isActive }) =>
+                          `group relative flex h-9 items-center gap-3 rounded-[10px] px-3 text-[0.875rem] font-medium transition-colors duration-150 ${
+                            isActive ? "text-fg" : "text-fg-muted hover:text-fg hover:bg-surface-2/60"
+                          }`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <>
+                            {isActive && (
+                              <motion.span
+                                layoutId={`${idPrefix}-nav-active`}
+                                className="absolute inset-0 rounded-[10px] bg-surface-2 border border-line"
+                                transition={{ type: "spring", duration: 0.32, bounce: 0.12 }}
+                              >
+                                <span className="absolute left-0 top-2 bottom-2 w-[3px] -translate-x-[5px] rounded-full bg-accent" />
+                              </motion.span>
+                            )}
+                            <Icon size={18} weight={isActive ? "fill" : "regular"} className={`relative shrink-0 ${isActive ? "text-accent-text" : ""}`} />
+                            <span className="relative truncate">{item.label}</span>
+                            {count > 0 && (
+                              <span
+                                className="relative ml-auto num inline-flex h-5 min-w-5 items-center justify-center rounded-[6px] bg-accent px-1.5 text-[0.6875rem] font-semibold text-accent-ink"
+                                aria-label={`${count} pending`}
+                              >
+                                {count}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </NavLink>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
+      </nav>
+
+      {/* Progress card */}
+      {user && (
+        <div className="shrink-0 p-3">
+          <div className="rounded-[14px] border border-line bg-surface p-3">
+            <div className="flex items-center gap-3">
+              <ProgressRing value={pct} size={42} stroke={3.5}>
+                <span className="num text-[0.8125rem] font-semibold text-fg">{user.level}</span>
+              </ProgressRing>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-fg">{user.first_name}</p>
+                <p className="text-xs text-fg-subtle">
+                  {user.role} · Level {user.level}
+                </p>
+              </div>
+            </div>
+            <XpMeter points={points} className="mt-3" />
+            <p className="mt-1.5 flex justify-between text-[0.6875rem] text-fg-subtle">
+              <span>Next level</span>
+              <span className="num">{inLevel}/500 XP</span>
+            </p>
           </div>
         </div>
-
-        {/* Navigation list */}
-        <nav className="p-3.5 flex flex-col gap-1.5 mt-2">
-          {links
-            .filter((link) => link.roles.includes(user?.role))
-            .map((link) => {
-              const Icon = link.icon;
-              return (
-                <NavLink
-                  key={link.to}
-                  to={link.to}
-                  className={({ isActive }) => `
-                    flex items-center justify-between px-3 py-2.5 rounded-xl border text-xs font-semibold uppercase tracking-wider transition-all group duration-300 min-w-0
-                    ${isActive
-                      ? "bg-neon-violet/10 border-neon-violet/30 text-neon-violet shadow-[0_0_12px_rgba(139,92,246,0.15)]"
-                      : "bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/30 hover:border-slate-800/40"
-                    }
-                  `}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Icon className="w-4 h-4 flex-shrink-0 transition-colors" />
-                    <span className="truncate whitespace-nowrap">{link.label}</span>
-                  </div>
-
-                  {link.badge && user?.role !== "Employee" && (
-                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md bg-neon-amber/10 border border-neon-amber/20 text-neon-amber uppercase tracking-wider whitespace-nowrap flex-shrink-0 ml-1.5 animate-pulse">
-                      {link.badge}
-                    </span>
-                  )}
-                </NavLink>
-              );
-            })}
-        </nav>
-      </div>
-
-      {/* Role Footer Indicators */}
-      <div className="p-4 border-t border-slate-900/60 bg-slate-950/20">
-        {user && (
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-900/40 bg-slate-950/40">
-            <ShieldCheck className="w-4 h-4 text-neon-emerald" />
-            <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest leading-none">
-                Access Tier:
-              </span>
-              <span className="text-xs font-extrabold text-neon-emerald uppercase tracking-wider font-mono leading-none mt-1">
-                {user.role}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-    </aside>
+      )}
+    </div>
   );
 };
 
 export default Sidebar;
-

@@ -8,6 +8,8 @@ from app.models.user import User
 from app.models.project import Project
 from app.schemas.task import TaskCreate, TaskUpdate, TaskOut, TaskStatusUpdate
 from app.services.gamification_service import GamificationService
+from app.services.notification_service import NotificationService
+from app.services.quest_service import QuestService
 
 router = APIRouter()
 
@@ -32,6 +34,32 @@ def verify_task_references(db: Session, assigned_to_id: Optional[int], project_i
                 detail=f"Data Integrity Error: Target project ID '{project_id}' does not exist."
             )
 
+# Employees may move their own tasks along, but every other field is set by a Manager or Admin.
+# Without this, an assigned employee could raise a task's XP and complete it in one request.
+EMPLOYEE_EDITABLE_FIELDS = {"status"}
+
+
+def ensure_employee_only_changes_status(current_user: User, schema: TaskUpdate):
+    if current_user.role != "Employee":
+        return
+    requested = {field for field, value in schema.model_dump(exclude_unset=True).items() if value is not None}
+    blocked = sorted(requested - EMPLOYEE_EDITABLE_FIELDS)
+    if blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Access Denied: Employees can only change a task's status, not its {', '.join(blocked)}."
+        )
+
+
+def ensure_not_reopening_completed(task: Task, new_status: Optional[str]):
+    """Completed tasks are locked: XP has been paid out, and reopening would let it be paid again."""
+    if task.status == "Completed" and new_status is not None and new_status != "Completed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Completed tasks are locked. Their XP has already been awarded."
+        )
+
+
 @router.get("/", response_model=list[TaskOut])
 def list_tasks(
     search: Optional[str] = Query(None, description="Search tasks by title or description"),
@@ -42,9 +70,13 @@ def list_tasks(
     current_user: User = Depends(get_current_user)
 ):
     """
-    List tasks with query search and filters. Accessible by all authenticated users.
+    List tasks with query search and filters.
+    - Admin and Manager: every task.
+    - Employee: only tasks assigned to them.
     """
     query = select(Task)
+    if current_user.role == "Employee":
+        query = query.where(Task.assigned_to_id == current_user.id)
     if status_filter:
         query = query.where(Task.status == status_filter)
     if assigned_to_id:
@@ -69,10 +101,16 @@ def get_task_detail(
 ):
     """
     Get detailed information for a specific task.
+    Employees can only open tasks assigned to them.
     """
     task = db.get(Task, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
+    if current_user.role == "Employee" and task.assigned_to_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access Denied: You can only view tasks assigned to you."
+        )
     return task
 
 @router.post("/", response_model=TaskOut, status_code=status.HTTP_201_CREATED)
@@ -98,6 +136,7 @@ def create_task(
     db.add(task)
     db.commit()
     db.refresh(task)
+    NotificationService.task_assigned(db, task, current_user)
     return task
 
 @router.put("/{task_id}", response_model=TaskOut)
@@ -109,8 +148,9 @@ def update_task(
 ):
     """
     Full update of task details.
-    Allowed: Admin, Manager, or Assigned Employee.
+    Allowed: Admin or Manager for every field; the assigned Employee for status only.
     Verifies reference integrity and triggers XP award if status changes to Completed.
+    Completed tasks cannot be moved back to another status.
     """
     task = db.get(Task, task_id)
     if not task:
@@ -126,7 +166,10 @@ def update_task(
             detail="Access Denied: Operational tier lacks credentials to modify this task."
         )
 
+    ensure_employee_only_changes_status(current_user, schema)
+    ensure_not_reopening_completed(task, schema.status)
     verify_task_references(db, schema.assigned_to_id, schema.project_id)
+    previous_assignee, previous_status = task.assigned_to_id, task.status
 
     if schema.title is not None:
         task.title = schema.title
@@ -152,6 +195,11 @@ def update_task(
 
     db.commit()
     db.refresh(task)
+    if task.assigned_to_id and task.assigned_to_id != previous_assignee:
+        NotificationService.task_assigned(db, task, current_user)
+    if task.status == "Completed" and previous_status != "Completed":
+        NotificationService.task_completed(db, task, current_user)
+        QuestService.on_task_completed(db, task)
     return task
 
 @router.put("/{task_id}/status", response_model=TaskOut)
@@ -182,6 +230,9 @@ def update_task_status(
             detail="Access Denied: Operational tier lacks credentials to modify this task assignment."
         )
 
+    ensure_not_reopening_completed(task, schema.status)
+    previous_status = task.status
+
     if schema.status == "Completed" and task.status != "Completed" and task.assigned_to_id:
         assigned_user = db.get(User, task.assigned_to_id)
         if assigned_user:
@@ -190,6 +241,9 @@ def update_task_status(
     task.status = schema.status
     db.commit()
     db.refresh(task)
+    if task.status == "Completed" and previous_status != "Completed":
+        NotificationService.task_completed(db, task, current_user)
+        QuestService.on_task_completed(db, task)
     return task
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -204,6 +258,7 @@ def delete_task(
     task = db.get(Task, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
+    NotificationService.remove_for_entity(db, f"task-{task.id}-", commit=False)
     db.delete(task)
     db.commit()
     return None

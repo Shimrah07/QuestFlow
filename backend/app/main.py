@@ -10,6 +10,8 @@ from app.routes.projects import router as projects_router
 from app.routes.tasks import router as tasks_router
 from app.routes.expenses import router as expenses_router
 from app.routes.reports import router as reports_router
+from app.routes.notifications import router as notifications_router
+from app.routes.quests import router as quests_router
 from app.core.config import settings
 
 # Import models to ensure they are registered in the Declarative Base metadata
@@ -17,6 +19,8 @@ from app.models.user import User, RefreshToken
 from app.models.project import Project
 from app.models.task import Task
 from app.models.expense import Expense
+from app.models.notification import Notification
+from app.models.quest import Quest, QuestProgress
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -38,6 +42,8 @@ app.include_router(projects_router, prefix=f"{settings.API_V1_STR}/projects", ta
 app.include_router(tasks_router, prefix=f"{settings.API_V1_STR}/tasks", tags=["Task Operations"])
 app.include_router(expenses_router, prefix=f"{settings.API_V1_STR}/expenses", tags=["Expense Tracking"])
 app.include_router(reports_router, prefix=f"{settings.API_V1_STR}/reports", tags=["System Reports"])
+app.include_router(notifications_router, prefix=f"{settings.API_V1_STR}/notifications", tags=["Notifications"])
+app.include_router(quests_router, prefix=f"{settings.API_V1_STR}/quests", tags=["Quests"])
 
 @app.get("/")
 def home():

@@ -55,7 +55,7 @@ export async function loginAs(page, role = 'Employee') {
   await page.locator('#robot-check').check();
 
   // Submit
-  await page.getByRole('button', { name: /Establish Connection/i }).click();
+  await page.getByTestId('login-submit').click();
 
   // Wait for redirect to dashboard
   await page.waitForURL('**/dashboard', { timeout: 10000 });
@@ -65,10 +65,11 @@ export async function loginAs(page, role = 'Employee') {
  * Logout helper: clicks logout in the sidebar.
  */
 export async function logout(page) {
-  // Click the logout button (look for a button with "logout" or "Terminate" text)
-  const logoutBtn = page.getByRole('button', { name: /logout|terminate|disconnect/i });
-  if (await logoutBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await logoutBtn.click();
+  // Open the profile menu in the header, then choose "Sign out"
+  const profileBtn = page.getByTestId('profile-menu');
+  if (await profileBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await profileBtn.click();
+    await page.getByRole('menuitem', { name: /sign out/i }).click();
   } else {
     // Clear localStorage directly as fallback
     await page.evaluate(() => {

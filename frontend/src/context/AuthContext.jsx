@@ -31,7 +31,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await AuthService.login(email, password);
       setUser(data.user);
-      showToast(`Welcome back, ${data.user.first_name}!`, "success");
+      showToast(`Welcome back, ${data.user.first_name}.`, "success");
       setLoading(false);
       return { success: true, role: data.user.role };
     } catch (error) {
@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const data = await AuthService.register(email, name, password, role);
-      showToast("Registration successful! Identity created, please log in.", "success");
+      showToast("Account created. Sign in to continue.", "success");
       setLoading(false);
       return { success: true };
     } catch (error) {
@@ -67,7 +67,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     AuthService.logout();
     setUser(null);
-    showToast("Session connection terminated.", "info");
+    showToast("You have been signed out.", "info");
   };
 
   // Refresh current user profile from backend API

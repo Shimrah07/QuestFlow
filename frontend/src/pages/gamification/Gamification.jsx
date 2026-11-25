@@ -1,9 +1,79 @@
-import React, { useState, useEffect } from "react";
-import Card from "../../components/common/Card";
-import Spinner from "../../components/common/Spinner";
+import React, { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import { Trophy, ArrowClockwise, Lightning, Medal } from "@phosphor-icons/react";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
-import { Trophy, Award, Star, Zap } from "lucide-react";
+import Button from "../../components/ui/Button";
+import { PageHeader, Avatar, EmptyState, Skeleton, Stagger, StaggerItem } from "../../components/ui/primitives";
+import { getAchievements } from "./achievements";
+
+const getRankBadge = (rank) => {
+  if (rank === 1) return "Champion";
+  if (rank === 2) return "Elite";
+  if (rank === 3) return "Expert";
+  return "Challenger";
+};
+
+const levelOf = (points) => Math.floor(points / 500) + 1;
+
+/** Top-three podium. Order on wide screens is 2, 1, 3 so the leader sits in the middle and highest. */
+const Podium = ({ top, currentUserId }) => {
+  const reduce = useReducedMotion();
+  const order = [top[1], top[0], top[2]].filter(Boolean);
+  const height = { 1: "sm:h-44", 2: "sm:h-36", 3: "sm:h-32" };
+
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end">
+      {order.map((u) => {
+        const rank = top.indexOf(u) + 1;
+        const isSelf = u.id === currentUserId;
+        const leader = rank === 1;
+        return (
+          <motion.div
+            key={u.id}
+            initial={reduce ? false : { opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1], delay: leader ? 0.05 : 0.15 }}
+            className={`${rank === 1 ? "order-first sm:order-none" : ""}`}
+            data-testid="podium-entry"
+          >
+            <div className="mb-3 flex items-center gap-3 sm:flex-col sm:text-center">
+              <div className="relative">
+                <Avatar name={u.first_name} size={leader ? 56 : 46} highlight={leader || isSelf} />
+                <span
+                  className={`num absolute -bottom-1.5 -right-1.5 grid h-6 w-6 place-items-center rounded-[7px] border text-[0.6875rem] font-semibold ${
+                    leader ? "border-accent bg-accent text-accent-ink" : "border-line-strong bg-surface-2 text-fg"
+                  }`}
+                >
+                  {rank}
+                </span>
+              </div>
+              <div className="min-w-0 sm:mt-1">
+                <p className="truncate text-sm font-semibold text-fg">
+                  {u.first_name}
+                  {isSelf && <span className="ml-1 font-normal text-fg-subtle">(you)</span>}
+                </p>
+                <p className="text-xs text-fg-subtle">
+                  {getRankBadge(rank)} · Level {levelOf(u.points)}
+                </p>
+              </div>
+              <p className="num ml-auto text-sm font-semibold text-fg sm:hidden">{u.points.toLocaleString()} XP</p>
+            </div>
+            <div
+              className={`hidden flex-col items-center justify-start rounded-t-[14px] border border-b-0 pt-4 sm:flex ${height[rank]} ${
+                leader ? "border-accent/35 bg-gradient-to-b from-accent/[0.16] to-transparent" : "border-line bg-gradient-to-b from-surface-2 to-transparent"
+              }`}
+            >
+              <Medal size={leader ? 26 : 22} weight="duotone" className={leader ? "text-accent-text" : "text-fg-subtle"} />
+              <p className={`num mt-2 font-semibold ${leader ? "text-xl text-fg" : "text-base text-fg"}`}>{u.points.toLocaleString()}</p>
+              <p className="text-[0.6875rem] text-fg-subtle">XP</p>
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+};
 
 const Gamification = () => {
   const { user: currentUser } = useAuth();
@@ -11,211 +81,171 @@ const Gamification = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    const fetchLeaderboard = async () => {
-      try {
-        setLoading(true);
-        setError("");
-        const response = await api.get("/users/leaderboard");
-        setLeaderboard(response.data);
-      } catch (err) {
-        console.error("Error loading leaderboard standings:", err);
-        setError("Failed to load operations standings. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchLeaderboard = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const response = await api.get("/users/leaderboard");
+      setLeaderboard(response.data);
+    } catch (err) {
+      console.error("Error loading leaderboard standings:", err);
+      setError("Couldn't load the leaderboard.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchLeaderboard();
   }, []);
 
-  const getRankBadge = (rank) => {
-    if (rank === 1) return "🥇 Champion";
-    if (rank === 2) return "🥈 Elite";
-    if (rank === 3) return "🥉 Expert";
-    return "🎖️ Challenger";
-  };
-
-  // Dynamically calculate achievements based on current user stats/roles
-  const userLevel = currentUser?.level || 1;
-  const userPoints = currentUser?.points || 0;
-  const userRole = currentUser?.role || "Employee";
-
-  const achievements = [
-    {
-      title: "First Ascent",
-      desc: "Achieved Level 2 operational clearance",
-      unlocked: userLevel >= 2,
-      icon: "⛰️",
-    },
-    {
-      title: "Bug Squash Commando",
-      desc: "Accumulated at least 300 XP in operations",
-      unlocked: userPoints >= 300,
-      icon: "🐞",
-    },
-    {
-      title: "Financial Architect",
-      desc: "Accumulated at least 1000 XP in operations ledger",
-      unlocked: userPoints >= 1000,
-      icon: "🏦",
-    },
-    {
-      title: "Ledger Sentinel",
-      desc: "Authorization level of Manager or Admin to block/approve ledgers",
-      unlocked: userRole === "Manager" || userRole === "Admin",
-      icon: "🛡️",
-    },
-  ];
+  const achievements = getAchievements(currentUser);
+  const myIndex = leaderboard.findIndex((u) => u.id === currentUser?.id);
+  const myRank = myIndex + 1;
+  const above = myIndex > 0 ? leaderboard[myIndex - 1] : null;
+  const leaderXp = leaderboard[0]?.points || 0;
+  const top = leaderboard.slice(0, 3);
+  const rest = leaderboard.slice(3);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <span className="text-[10px] font-bold tracking-widest text-neon-emerald uppercase font-display">
-          XP Leaderboard & Achievements
-        </span>
-        <h1 className="text-2xl font-display font-extrabold text-slate-100 mt-1">
-          THE LEADERBOARD GRID
-        </h1>
-      </div>
+    <div className="flex flex-col gap-6 lg:gap-8">
+      <PageHeader title="Leaderboard" description="Active members ranked by total XP. Finish tasks to climb." />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Leaderboard panel */}
-        <Card glowColor="none" hoverEffect={false} className="lg:col-span-2 bg-bg-card border-slate-900/60">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-display font-bold text-xs uppercase tracking-wider text-slate-200 flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-neon-amber animate-pulse" />
-              Active System Standings
-            </h3>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        {/* Standings */}
+        <section className="surface flex flex-col lg:col-span-8" aria-labelledby="standings-title">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4 sm:px-6">
+            <h2 id="standings-title" className="flex items-center gap-2 text-[0.9375rem] font-semibold text-fg">
+              <Trophy size={17} weight="fill" className="text-accent-text" />
+              Team standings
+            </h2>
+            {!loading && !error && myRank > 0 && (
+              <p className="text-[0.8125rem] text-fg-muted" data-testid="my-rank">
+                You're <span className="num font-semibold text-fg">#{myRank}</span> of <span className="num">{leaderboard.length}</span>
+                {above && (
+                  <span className="text-fg-subtle">
+                    {" "}
+                    · <span className="num">{(above.points - (currentUser?.points || 0)).toLocaleString()}</span> XP behind {above.first_name}
+                  </span>
+                )}
+              </p>
+            )}
           </div>
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-3">
-              <Spinner size="lg" color="emerald" />
-              <span className="text-xs text-slate-500 font-mono uppercase tracking-wider">
-                Accessing operations ledger...
-              </span>
+            <div className="flex flex-col gap-4 p-5 sm:p-6" aria-busy="true" aria-label="Loading standings">
+              <div className="grid gap-3 sm:grid-cols-3 sm:items-end">
+                <Skeleton className="h-40" />
+                <Skeleton className="h-48" />
+                <Skeleton className="h-36" />
+              </div>
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-12" />
+              ))}
             </div>
           ) : error ? (
-            <div className="p-4 rounded-lg bg-neon-rose/10 border border-neon-rose/30 text-rose-400 text-xs font-semibold text-center">
-              {error}
-            </div>
+            <EmptyState
+              icon={Trophy}
+              title={error}
+              description="Check your connection and try again."
+              action={
+                <Button icon={ArrowClockwise} onClick={fetchLeaderboard}>
+                  Try again
+                </Button>
+              }
+            />
+          ) : leaderboard.length === 0 ? (
+            <EmptyState icon={Trophy} title="No one on the board yet" description="Standings appear once team members earn XP." />
           ) : (
-            <div className="flex flex-col gap-3">
-              {leaderboard.length === 0 ? (
-                <div className="text-center py-12 text-slate-500 text-xs uppercase tracking-wider">
-                  No active operations logs found.
-                </div>
-              ) : (
-                leaderboard.map((user, idx) => {
-                  const rank = idx + 1;
-                  const isSelf = currentUser?.id === user.id;
-                  return (
-                    <div
-                      key={user.id}
-                      className={`
-                        flex items-center justify-between p-3 px-4 rounded-xl border transition-all duration-300
-                        ${
-                          isSelf
-                            ? "border-neon-violet/30 bg-neon-violet/10 shadow-[0_0_12px_rgba(139,92,246,0.15)]"
-                            : rank === 1
-                            ? "border-neon-amber/25 bg-neon-amber/5"
-                            : "border-slate-900/40 bg-slate-950/20"
-                        }
-                      `}
-                    >
-                      <div className="flex items-center gap-4">
-                        <span
-                          className={`font-display font-extrabold text-sm font-mono ${
-                            rank === 1
-                              ? "text-neon-amber font-display text-base"
-                              : isSelf
-                              ? "text-neon-violet"
-                              : "text-slate-500"
-                          }`}
-                        >
-                          #{rank}
-                        </span>
+            <div className="flex flex-col gap-6 p-5 sm:p-6">
+              <Podium top={top} currentUserId={currentUser?.id} />
 
-                        <div className="w-9 h-9 rounded-lg bg-slate-950/60 border border-slate-900 flex items-center justify-center text-xs font-bold text-slate-300 uppercase">
-                          {user.first_name.charAt(0)}
+              {rest.length > 0 && (
+                <Stagger className="flex flex-col" delay={0.03}>
+                  {rest.map((user, idx) => {
+                    const rank = idx + 4;
+                    const isSelf = currentUser?.id === user.id;
+                    const share = leaderXp ? (user.points / leaderXp) * 100 : 0;
+                    return (
+                      <StaggerItem
+                        key={user.id}
+                        className={`relative flex items-center gap-3 rounded-[12px] px-3 py-3 sm:gap-4 ${isSelf ? "bg-accent/[0.07] ring-1 ring-accent/25" : ""}`}
+                      >
+                        <span className={`num w-7 shrink-0 text-right text-[0.8125rem] font-semibold ${isSelf ? "text-accent-text" : "text-fg-subtle"}`}>{rank}</span>
+                        <Avatar name={user.first_name} size={32} highlight={isSelf} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-fg">
+                            {user.first_name}
+                            {isSelf && <span className="ml-1 font-normal text-fg-subtle">(you)</span>}
+                          </p>
+                          <p className="truncate text-xs text-fg-subtle">
+                            {user.role} · Level {levelOf(user.points)}
+                          </p>
                         </div>
-
-                        <div className="flex flex-col">
-                          <span className={`text-xs font-bold ${isSelf ? "text-neon-violet" : "text-slate-200"}`}>
-                            {user.first_name} {isSelf && "(You)"}
-                          </span>
-                          <span className="text-[9px] text-slate-500 uppercase font-mono mt-0.5">
-                            {user.role} • Level {Math.floor(user.points / 500) + 1}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-neon-emerald/10 border border-neon-emerald/25 text-neon-emerald font-mono uppercase tracking-wider">
-                          {getRankBadge(rank)}
+                        <span className="hidden text-xs text-fg-subtle sm:inline">{getRankBadge(rank)}</span>
+                        <span className="num w-20 shrink-0 text-right text-sm font-semibold text-fg">{user.points.toLocaleString()} XP</span>
+                        {/* share of the leader's XP, slim bar on the row's bottom edge */}
+                        <span className="absolute inset-x-3 bottom-0 h-[3px] overflow-hidden rounded-full bg-surface-2" aria-hidden>
+                          <span className={`block h-full rounded-full ${isSelf ? "bg-accent" : "bg-fg-subtle/40"}`} style={{ width: `${share}%` }} />
                         </span>
-                        <span className="text-xs font-bold text-slate-200 font-mono">
-                          {user.points.toLocaleString()} XP
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
+                      </StaggerItem>
+                    );
+                  })}
+                </Stagger>
               )}
             </div>
           )}
-        </Card>
+        </section>
 
-        {/* Badges and achievements status */}
-        <Card glowColor="violet" hoverEffect={false} className="bg-bg-card border-slate-900/60 flex flex-col gap-6">
-          <div>
-            <h3 className="font-display font-bold text-xs uppercase tracking-wider text-slate-200 flex items-center gap-2">
-              <Award className="w-4 h-4 text-neon-violet" />
-              Achievements Gallery
-            </h3>
-            <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">
-              Acquired medals in operations
-            </p>
+        {/* Achievements */}
+        <section className="surface flex flex-col lg:col-span-4" aria-labelledby="achievements-title">
+          <div className="flex items-center justify-between border-b border-line px-5 py-4">
+            <h2 id="achievements-title" className="text-[0.9375rem] font-semibold text-fg">
+              Achievements
+            </h2>
+            <span className="num text-xs text-fg-subtle">
+              {achievements.filter((a) => a.unlocked).length}/{achievements.length}
+            </span>
           </div>
-
-          <div className="flex flex-col gap-3">
-            {achievements.map((badge, idx) => (
-              <div
-                key={idx}
-                className={`
-                  flex items-start gap-3.5 p-3 rounded-xl border transition-all duration-300
-                  ${
-                    badge.unlocked
-                      ? "border-neon-violet/20 bg-neon-violet/5 text-slate-200"
-                      : "border-slate-900/60 bg-slate-950/40 opacity-40"
-                  }
-                `}
-              >
+          <div className="grid grid-cols-2 gap-2.5 p-4">
+            {achievements.map((badge) => {
+              const Icon = badge.icon;
+              return (
                 <div
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                    badge.unlocked
-                      ? "bg-neon-violet/10 border border-neon-violet/20"
-                      : "bg-slate-900 border border-slate-800"
+                  key={badge.id}
+                  className={`flex flex-col gap-3 rounded-[14px] border p-3.5 transition-colors ${
+                    badge.unlocked ? "border-accent/30 bg-accent/[0.06]" : "border-line bg-surface-2/50"
                   }`}
                 >
-                  {badge.icon}
-                </div>
-
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-bold">{badge.title}</span>
-                  <span className="text-[9px] leading-relaxed text-slate-400">
-                    {badge.desc}
+                  <span
+                    className={`grid h-10 w-10 place-items-center rounded-[11px] border ${
+                      badge.unlocked ? "border-accent/35 bg-accent/15 text-accent-text" : "border-line bg-surface-2 text-fg-subtle"
+                    }`}
+                  >
+                    <Icon size={20} weight={badge.unlocked ? "fill" : "regular"} />
                   </span>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-semibold ${badge.unlocked ? "text-fg" : "text-fg-muted"}`}>{badge.title}</p>
+                    <p className="mt-0.5 text-xs leading-snug text-fg-subtle">{badge.desc}</p>
+                  </div>
+                  <div>
+                    <div className="h-[3px] overflow-hidden rounded-full bg-surface-3">
+                      <div className={`h-full rounded-full ${badge.unlocked ? "bg-accent" : "bg-fg-subtle/60"}`} style={{ width: `${badge.progress * 100}%` }} />
+                    </div>
+                    <p className="num mt-1.5 text-[0.6875rem] text-fg-subtle">{badge.unlocked ? "Unlocked" : badge.meta}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        </Card>
+          <div className="mt-auto flex items-center gap-2 border-t border-line px-5 py-3 text-xs text-fg-subtle">
+            <Lightning size={13} weight="fill" className="text-accent-text" />
+            Every 500 XP is a new level.
+          </div>
+        </section>
       </div>
     </div>
   );
 };
 
 export default Gamification;
-

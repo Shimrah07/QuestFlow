@@ -5,6 +5,7 @@ import { ToastProvider } from "../context/ToastContext";
 import { ThemeProvider } from "../context/ThemeContext";
 import { NotificationProvider } from "../context/NotificationContext";
 import Spinner from "../components/common/Spinner";
+import ErrorBoundary from "../components/common/ErrorBoundary";
 
 // Layout templates
 import AuthLayout from "../layouts/AuthLayout";
@@ -22,6 +23,7 @@ const Tasks = lazy(() => import("../pages/tasks/Tasks"));
 const Expenses = lazy(() => import("../pages/expenses/Expenses"));
 const Approvals = lazy(() => import("../pages/approvals/Approvals"));
 const Gamification = lazy(() => import("../pages/gamification/Gamification"));
+const Quests = lazy(() => import("../pages/quests/Quests"));
 const ManageUsers = lazy(() => import("../pages/admin/ManageUsers"));
 const ManageProjects = lazy(() => import("../pages/admin/ManageProjects"));
 const SystemReports = lazy(() => import("../pages/admin/SystemReports"));
@@ -35,6 +37,8 @@ const LoadingFallback = () => (
 const AppRoutes = () => {
   return (
     <BrowserRouter>
+      {/* Last line of defence: even a crash in a provider shows a recoverable message, not a blank page */}
+      <ErrorBoundary>
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
@@ -98,6 +102,7 @@ const AppRoutes = () => {
                     />
                     
                     <Route path="/gamification" element={<Gamification />} />
+                    <Route path="/quests" element={<Quests />} />
                   </Route>
 
                   {/* Catch-all fallback */}
@@ -108,6 +113,7 @@ const AppRoutes = () => {
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 };

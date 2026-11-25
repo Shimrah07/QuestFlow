@@ -1,10 +1,105 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  Plus,
+  MagnifyingGlass,
+  Eye,
+  PencilSimple,
+  Trash,
+  CaretLeft,
+  CaretRight,
+  Receipt,
+  Code,
+  Desktop,
+  AirplaneTilt,
+  ForkKnife,
+  FunnelSimple,
+} from "@phosphor-icons/react";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
-import Card from "../../components/common/Card";
-import Spinner from "../../components/common/Spinner";
 import { useToast } from "../../context/ToastContext";
-import { PlusCircle, Search, FileText, CheckCircle2, AlertCircle, RefreshCw, X, DollarSign, Edit2, Eye, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import Button from "../../components/ui/Button";
+import Field from "../../components/ui/Field";
+import Modal from "../../components/ui/Modal";
+import { TextInput } from "../../components/ui/inputs";
+import ReceiptScanner from "../../components/expenses/ReceiptScanner";
+import {
+  PageHeader,
+  StatusBadge,
+  Avatar,
+  EmptyState,
+  Skeleton,
+  Segmented,
+  formatMoney,
+  formatDate,
+} from "../../components/ui/primitives";
+
+const CATEGORIES = ["Software", "Equipment", "Travel", "Meals"];
+const CATEGORY_ICON = { Software: Code, Equipment: Desktop, Travel: AirplaneTilt, Meals: ForkKnife };
+const ROW_GRID = "md:grid md:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto] md:items-center md:gap-4";
+
+const CategoryIcon = ({ category, size = 16 }) => {
+  const Icon = CATEGORY_ICON[category] || Receipt;
+  return <Icon size={size} weight="regular" aria-hidden />;
+};
+
+/** Title, category and amount inputs shared by the create and edit dialogs. */
+const ExpenseFields = ({ title, setTitle, category, setCategory, amount, setAmount, testIds = true }) => (
+  <div className="flex flex-col gap-4">
+    <Field label="Title">
+      {(p) => (
+        <TextInput
+          {...p}
+          type="text"
+          data-testid={testIds ? "expense-title-input" : undefined}
+          data-autofocus
+          placeholder="e.g. Client dinner"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+        />
+      )}
+    </Field>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <Field label="Category">
+        {(p) => (
+          <select
+            {...p}
+            className="control"
+            data-testid={testIds ? "expense-category-select" : undefined}
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
+      </Field>
+      <Field label="Amount">
+        {(p) => (
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-fg-subtle">$</span>
+            <input
+              {...p}
+              type="number"
+              inputMode="decimal"
+              data-testid={testIds ? "expense-amount-input" : undefined}
+              step="0.01"
+              min="0.01"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="control num pl-8"
+              required
+            />
+          </div>
+        )}
+      </Field>
+    </div>
+  </div>
+);
 
 const Expenses = () => {
   const { user } = useAuth();
@@ -38,26 +133,29 @@ const Expenses = () => {
   const isAdmin = user?.role === "Admin";
   const canAddExpense = isEmployee || isManager || isAdmin;
 
-  const fetchExpenses = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get("/expenses");
-      setExpenses(response.data);
-    } catch (error) {
-      showToast("Failed to retrieve expense ledger.", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Load claims once on mount; stale responses are ignored (StrictMode double-mount safe).
   useEffect(() => {
-    fetchExpenses();
-  }, []);
+    let ignore = false;
+    api
+      .get("/expenses")
+      .then((response) => {
+        if (!ignore) setExpenses(response.data);
+      })
+      .catch(() => {
+        if (!ignore) showToast("Couldn't load expense claims.", "error");
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [showToast]);
 
   const handleCreateExpense = async (e) => {
     e.preventDefault();
     if (!title.trim() || !amount || parseFloat(amount) <= 0) {
-      showToast("Please enter a valid title and positive amount.", "error");
+      showToast("Enter a title and an amount greater than zero.", "error");
       return;
     }
 
@@ -69,20 +167,20 @@ const Expenses = () => {
         amount: parseFloat(amount),
       });
 
-      showToast("Expense submission sent to manager review queue.", "success");
+      showToast("Claim submitted for manager review.", "success");
       setExpenses((prev) => [
         ...prev,
         {
           ...response.data,
-          submitted_by: { first_name: user.first_name, email: user.email }
-        }
+          submitted_by: { first_name: user.first_name, email: user.email },
+        },
       ]);
       window.dispatchEvent(new Event("approvals-updated"));
-      
+
       setShowCreateModal(false);
       resetForm();
     } catch (error) {
-      showToast(error.response?.data?.detail || "Failed to upload expense.", "error");
+      showToast(error.response?.data?.detail || "Couldn't submit the claim.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -107,7 +205,7 @@ const Expenses = () => {
         category,
         amount: parseFloat(amount),
       });
-      showToast("Expense claim updated successfully.", "success");
+      showToast("Claim updated.", "success");
       setExpenses((prev) =>
         prev.map((eItem) => (eItem.id === selectedExpense.id ? { ...eItem, ...response.data } : eItem))
       );
@@ -115,7 +213,7 @@ const Expenses = () => {
       setShowEditModal(false);
       resetForm();
     } catch (error) {
-      showToast(error.response?.data?.detail || "Failed to update expense claim.", "error");
+      showToast(error.response?.data?.detail || "Couldn't update the claim.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -131,13 +229,13 @@ const Expenses = () => {
     try {
       setSubmitting(true);
       await api.delete(`/expenses/${selectedExpense.id}`);
-      showToast("Expense claim deleted successfully.", "success");
+      showToast("Claim deleted.", "success");
       setExpenses((prev) => prev.filter((eItem) => eItem.id !== selectedExpense.id));
       window.dispatchEvent(new Event("approvals-updated"));
       setShowDeleteModal(false);
       setSelectedExpense(null);
     } catch (error) {
-      showToast(error.response?.data?.detail || "Failed to delete expense claim.", "error");
+      showToast(error.response?.data?.detail || "Couldn't delete the claim.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -155,18 +253,17 @@ const Expenses = () => {
     setSelectedExpense(null);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <Spinner size="lg" color="rose" />
-      </div>
-    );
-  }
+  const clearFilters = () => {
+    setSearch("");
+    setCategoryFilter("All Categories");
+    setStatusFilter("All Statuses");
+    setCurrentPage(1);
+  };
 
   // Filter expenses based on search, category, and status selections
   const filteredExpenses = expenses.filter((item) => {
-    const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase()) || 
-                          item.id.toString().includes(search);
+    const matchesSearch =
+      item.title.toLowerCase().includes(search.toLowerCase()) || item.id.toString().includes(search);
     const matchesCategory = categoryFilter === "All Categories" || item.category === categoryFilter;
     const matchesStatus = statusFilter === "All Statuses" || item.status === statusFilter;
     return matchesSearch && matchesCategory && matchesStatus;
@@ -174,423 +271,440 @@ const Expenses = () => {
 
   // Calculate pagination bounds
   const totalPages = Math.ceil(filteredExpenses.length / itemsPerPage) || 1;
-  const paginatedExpenses = filteredExpenses.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const paginatedExpenses = filteredExpenses.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Summary figures over everything this user can see
+  const sumBy = (status) => expenses.filter((e) => e.status === status).reduce((s, e) => s + e.amount, 0);
+  const countBy = (status) => expenses.filter((e) => e.status === status).length;
+  const summary = [
+    { label: "Pending review", value: formatMoney(sumBy("Pending")), sub: `${countBy("Pending")} claims`, accent: true },
+    { label: "Approved", value: formatMoney(sumBy("Approved")), sub: `${countBy("Approved")} claims` },
+    { label: "Rejected", value: formatMoney(sumBy("Rejected")), sub: `${countBy("Rejected")} claims` },
+    { label: "All claims", value: expenses.length.toString(), sub: "visible to you" },
+  ];
+
+  const statusOptions = [
+    { value: "All Statuses", label: "All", count: expenses.length },
+    { value: "Pending", label: "Pending", count: countBy("Pending") },
+    { value: "Approved", label: "Approved", count: countBy("Approved") },
+    { value: "Rejected", label: "Rejected", count: countBy("Rejected") },
+  ];
+
+  const description = isAdmin
+    ? "Every claim submitted across the workspace."
+    : isManager
+      ? "Your own claims, plus team claims waiting for review."
+      : "Your expense claims and where each one stands.";
+
+  const filtersActive = search || categoryFilter !== "All Categories" || statusFilter !== "All Statuses";
+  const firstShown = filteredExpenses.length ? (currentPage - 1) * itemsPerPage + 1 : 0;
+  const lastShown = Math.min(currentPage * itemsPerPage, filteredExpenses.length);
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <span className="text-[10px] font-bold tracking-widest text-neon-rose uppercase">Financial Ledger</span>
-          <h1 className="text-2xl font-display font-extrabold text-slate-100 mt-1">EXPENSE TRACKER</h1>
-        </div>
-        {canAddExpense && (
-          <button
-            data-testid="create-expense-btn"
-            onClick={() => {
-              resetForm();
-              setShowCreateModal(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-neon-rose text-white font-bold text-xs uppercase tracking-widest border border-neon-rose/30 hover:shadow-[0_0_12px_rgba(244,63,94,0.3)] transition-all cursor-pointer"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Upload Expense</span>
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title="Expenses"
+        description={description}
+        actions={
+          canAddExpense && (
+            <Button
+              variant="primary"
+              icon={Plus}
+              data-testid="create-expense-btn"
+              onClick={() => {
+                resetForm();
+                setShowCreateModal(true);
+              }}
+            >
+              New claim
+            </Button>
+          )
+        }
+      />
 
-      <div className="grid grid-cols-1 gap-4">
-        {/* Search & filters controls */}
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between p-4 rounded-xl border border-slate-900 bg-bg-panel/40 backdrop-blur-sm">
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search expenses..."
+      {/* Summary strip */}
+      <section aria-label="Claim totals" className="surface grid grid-cols-2 lg:grid-cols-4">
+        {summary.map((s, i) => (
+          <div
+            key={s.label}
+            className={`flex flex-col gap-1 p-4 sm:p-5 ${i % 2 === 1 ? "border-l border-line" : ""} ${i >= 2 ? "border-t border-line lg:border-t-0" : ""} ${i === 2 ? "lg:border-l" : ""}`}
+          >
+            <span className="text-xs font-medium text-fg-subtle">{s.label}</span>
+            {loading ? (
+              <Skeleton className="mt-1 h-7 w-24" />
+            ) : (
+              <span className={`num text-xl font-semibold sm:text-[1.375rem] ${s.accent ? "text-accent-text" : "text-fg"}`}>{s.value}</span>
+            )}
+            <span className="text-xs text-fg-subtle">{loading ? " " : s.sub}</span>
+          </div>
+        ))}
+      </section>
+
+      {/* Toolbar */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <Segmented
+          ariaLabel="Filter by status"
+          layoutId="expense-status"
+          options={statusOptions}
+          value={statusFilter}
+          onChange={(v) => {
+            setStatusFilter(v);
+            setCurrentPage(1);
+          }}
+        />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="sm:w-72">
+            <TextInput
+              icon={MagnifyingGlass}
+              type="search"
+              aria-label="Search claims"
+              placeholder="Search by title or ID"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full bg-slate-950/60 border border-slate-900 rounded-lg py-2 pl-9 pr-4 text-xs text-slate-200 focus:outline-none focus:border-slate-800 transition-colors"
+              className="h-10"
             />
           </div>
-          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <div className="relative sm:w-48">
+            <FunnelSimple size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-fg-subtle" aria-hidden />
             <select
+              aria-label="Filter by category"
               value={categoryFilter}
               onChange={(e) => {
                 setCategoryFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="flex-1 sm:flex-none bg-slate-950/60 border border-slate-900 rounded-lg py-2 px-3 text-xs text-slate-400 focus:outline-none focus:border-slate-800 cursor-pointer"
+              className="control h-10 pl-10"
             >
-              <option value="All Categories">All Categories</option>
-              <option value="Software">Software</option>
-              <option value="Equipment">Equipment</option>
-              <option value="Travel">Travel</option>
-              <option value="Meals">Meals</option>
-            </select>
-
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="flex-1 sm:flex-none bg-slate-950/60 border border-slate-900 rounded-lg py-2 px-3 text-xs text-slate-400 focus:outline-none focus:border-slate-800 cursor-pointer"
-            >
-              <option value="All Statuses">All Statuses</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
+              <option value="All Categories">All categories</option>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
             </select>
           </div>
         </div>
-
-        {/* Expenses List */}
-        {paginatedExpenses.length === 0 ? (
-          <Card glowColor="none" className="bg-bg-card border-slate-900/60 text-center py-12 text-slate-500">
-            No expenses logged matching the current filter criteria.
-          </Card>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {paginatedExpenses.map((item, idx) => {
-              const canEditOrDelete = isAdmin || (item.submitted_by_id === user.id && item.status === "Pending");
-              return (
-                <Card
-                  key={idx}
-                  glowColor={item.status === "Pending" ? "amber" : item.status === "Approved" ? "emerald" : "rose"}
-                  hoverEffect={false}
-                  className="bg-bg-card border-slate-900/60"
-                >
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-lg bg-slate-950/40 border border-slate-900/60 text-slate-400">
-                        <FileText className="w-5 h-5" />
-                      </div>
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">EXP-{item.id}</span>
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => openDetailModal(item)} title="View Details" className="text-slate-500 hover:text-slate-300">
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                            {canEditOrDelete && (
-                              <>
-                                <button onClick={() => openEditModal(item)} title="Edit Claim" className="text-slate-500 hover:text-neon-rose">
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button onClick={() => openDeleteModal(item)} title="Delete Claim" className="text-slate-500 hover:text-neon-rose">
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-sm font-bold text-slate-200 mt-0.5">{item.title}</span>
-                        <div className="flex flex-wrap items-center gap-2 mt-1 text-[10px] text-slate-400 font-mono">
-                          <span>Category: {item.category}</span>
-                          <span>•</span>
-                          <span>Submitted By: {item.submitted_by?.first_name || "Agent"}</span>
-                          <span>•</span>
-                          <span>Date: {new Date(item.created_at).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end">
-                      <span className="text-base font-display font-extrabold text-slate-100 font-mono">
-                        ${item.amount.toFixed(2)}
-                      </span>
-
-                      <span className={`
-                        text-[9px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-wider flex items-center gap-1.5 border
-                        ${
-                          item.status === "Approved"
-                            ? "bg-neon-emerald/10 border-neon-emerald/20 text-neon-emerald"
-                            : item.status === "Rejected"
-                            ? "bg-neon-rose/10 border-neon-rose/20 text-neon-rose"
-                            : "bg-neon-amber/10 border-neon-amber/20 text-neon-amber animate-pulse"
-                        }
-                      `}>
-                        {item.status === "Approved" && <CheckCircle2 className="w-3.5 h-3.5" />}
-                        {item.status === "Rejected" && <AlertCircle className="w-3.5 h-3.5" />}
-                        {item.status === "Pending" && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                        <span>{item.status}</span>
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Pagination Bar */}
-        {totalPages > 1 && (
-          <div className="flex justify-between items-center p-3 rounded-xl border border-slate-900 bg-slate-950/40 text-xs font-mono text-slate-400">
-            <span>
-              Page {currentPage} of {totalPages} ({filteredExpenses.length} Total Claims)
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                disabled={currentPage === 1}
-                className="p-1.5 rounded-lg border border-slate-900 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="p-1.5 rounded-lg border border-slate-900 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Upload Expense Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-bg-card border border-slate-800 rounded-2xl shadow-2xl relative">
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-neon-rose to-neon-amber" />
-            
-            <div className="p-6 flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-display font-extrabold text-lg text-slate-100 uppercase tracking-wider">Upload Expense</h3>
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="p-1 rounded-lg border border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-900 transition-all cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+      {/* Claims list */}
+      <section aria-label="Expense claims" className="surface overflow-hidden">
+        <div className={`hidden border-b border-line bg-surface-2/50 px-5 py-2.5 text-xs font-medium text-fg-subtle ${ROW_GRID}`}>
+          <span>Claim</span>
+          <span>Category</span>
+          <span>Submitted by</span>
+          <span>Date</span>
+          <span className="text-right">Amount</span>
+          <span>Status</span>
+          <span className="w-[6.5rem] text-right">Actions</span>
+        </div>
 
-              <form onSubmit={handleCreateExpense} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expense Title</label>
-                  <input
-                    type="text"
-                    data-testid="expense-title-input"
-                    placeholder="Expense Title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-rose/50"
-                    required
-                  />
+        {loading ? (
+          <ul aria-busy="true">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <li key={i} className="flex items-center gap-4 border-b border-line px-5 py-4 last:border-b-0">
+                <Skeleton className="h-9 w-9 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-3.5 w-2/5" />
+                  <Skeleton className="h-3 w-1/4" />
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Category</label>
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-xs text-slate-300 focus:outline-none focus:border-neon-rose/50 cursor-pointer"
-                    >
-                      <option value="Software">Software</option>
-                      <option value="Equipment">Equipment</option>
-                      <option value="Travel">Travel</option>
-                      <option value="Meals">Meals</option>
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Amount ($)</label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                      <input
-                        type="number"
-                        data-testid="expense-amount-input"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 pl-8 pr-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-rose/50 font-mono"
-                        min="0.01"
-                        required
-                      />
+                <Skeleton className="h-5 w-20" />
+              </li>
+            ))}
+          </ul>
+        ) : paginatedExpenses.length === 0 ? (
+          filtersActive ? (
+            <EmptyState
+              icon={MagnifyingGlass}
+              title="No claims match these filters"
+              description="Try a different search term, category or status."
+              action={
+                <Button variant="secondary" size="sm" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={Receipt}
+              title="No expense claims yet"
+              description="Submit a claim for travel, meals, software or equipment and a manager will review it."
+              action={
+                canAddExpense && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={Plus}
+                    onClick={() => {
+                      resetForm();
+                      setShowCreateModal(true);
+                    }}
+                  >
+                    New claim
+                  </Button>
+                )
+              }
+            />
+          )
+        ) : (
+          <ul>
+            {paginatedExpenses.map((item) => {
+              const canEditOrDelete = isAdmin || (item.submitted_by_id === user.id && item.status === "Pending");
+              const isMine = item.submitted_by_id === user.id;
+              const submitter = isMine ? "You" : item.submitted_by?.first_name || "Unknown";
+              return (
+                <li
+                  key={item.id}
+                  data-testid="expense-row"
+                  className={`row-hover flex flex-col gap-3 border-b border-line px-4 py-4 last:border-b-0 sm:px-5 ${ROW_GRID}`}
+                >
+                  {/* Claim */}
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border border-line bg-surface-2 text-fg-muted">
+                      <CategoryIcon category={item.category} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => openDetailModal(item)}
+                        className="block max-w-full truncate text-left text-sm font-semibold text-fg hover:text-accent-text"
+                      >
+                        {item.title}
+                      </button>
+                      <span className="num text-xs text-fg-subtle">EXP-{item.id}</span>
                     </div>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  data-testid="expense-submit"
-                  disabled={submitting}
-                  className="w-full mt-2 rounded-xl py-3.5 bg-neon-rose text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-neon-rose/30 hover:bg-neon-rose/90 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {submitting ? <Spinner size="sm" color="white" /> : <span>Submit Expense Claim</span>}
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Expense Modal */}
-      {showEditModal && selectedExpense && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-bg-card border border-slate-800 rounded-2xl shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-neon-rose to-neon-amber" />
-            
-            <div className="p-6 flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-display font-extrabold text-lg text-slate-100 uppercase tracking-wider">Edit Expense Claim</h3>
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="p-1 rounded-lg text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleUpdateExpense} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expense Title</label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-rose/50"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Category</label>
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-xs text-slate-300 focus:outline-none focus:border-neon-rose/50 cursor-pointer"
-                    >
-                      <option value="Software">Software</option>
-                      <option value="Equipment">Equipment</option>
-                      <option value="Travel">Travel</option>
-                      <option value="Meals">Meals</option>
-                    </select>
+                    <span className="num text-[0.9375rem] font-semibold text-fg md:hidden">{formatMoney(item.amount)}</span>
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Amount ($)</label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 pl-8 pr-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-rose/50 font-mono"
-                        min="0.01"
-                        required
-                      />
-                    </div>
+                  {/* Mobile meta line */}
+                  <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 pl-12 text-xs text-fg-muted md:hidden ${canEditOrDelete ? "pr-[6.75rem]" : "pr-10"}`}>
+                    <StatusBadge status={item.status} />
+                    <span>{item.category}</span>
+                    <span>{submitter}</span>
+                    <span>{formatDate(item.created_at, { month: "short", day: "numeric", year: "numeric" })}</span>
                   </div>
-                </div>
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full mt-2 rounded-xl py-3.5 bg-neon-rose text-white font-bold text-xs uppercase tracking-widest hover:bg-neon-rose/90 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {submitting ? <Spinner size="sm" color="white" /> : <span>Update Claim</span>}
-                </button>
-              </form>
+                  {/* Desktop cells */}
+                  <span className="hidden truncate text-sm text-fg-muted md:block">{item.category}</span>
+                  <span className="hidden min-w-0 items-center gap-2 md:flex">
+                    <Avatar name={item.submitted_by?.first_name || "?"} size={24} highlight={isMine} />
+                    <span className="truncate text-sm text-fg-muted">{submitter}</span>
+                  </span>
+                  <span className="hidden text-sm text-fg-muted md:block">
+                    {formatDate(item.created_at, { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                  <span className="num hidden text-right text-sm font-semibold text-fg md:block">{formatMoney(item.amount)}</span>
+                  <span className="hidden md:block">
+                    <StatusBadge status={item.status} />
+                  </span>
+
+                  {/* Actions */}
+                  <div className="-mb-1.5 -mt-9 ml-auto flex items-center justify-end gap-0.5 md:m-0 md:w-[6.5rem]">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      icon={Eye}
+                      title="View details"
+                      aria-label={`View ${item.title}`}
+                      onClick={() => openDetailModal(item)}
+                    />
+                    {canEditOrDelete && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          iconOnly
+                          icon={PencilSimple}
+                          title="Edit claim"
+                          aria-label={`Edit ${item.title}`}
+                          data-testid="expense-edit"
+                          onClick={() => openEditModal(item)}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          iconOnly
+                          icon={Trash}
+                          title="Delete claim"
+                          aria-label={`Delete ${item.title}`}
+                          data-testid="expense-delete"
+                          className="hover:!text-danger"
+                          onClick={() => openDeleteModal(item)}
+                        />
+                      </>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {/* Pagination */}
+        {!loading && totalPages > 1 && (
+          <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-3 sm:px-5">
+            <span className="text-xs text-fg-subtle">
+              Showing <span className="num text-fg-muted">{firstShown}-{lastShown}</span> of{" "}
+              <span className="num text-fg-muted">{filteredExpenses.length}</span>
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="secondary"
+                size="sm"
+                iconOnly
+                icon={CaretLeft}
+                aria-label="Previous page"
+                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+              />
+              <span className="num px-2 text-xs text-fg-muted">
+                {currentPage} / {totalPages}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                iconOnly
+                icon={CaretRight}
+                aria-label="Next page"
+                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
+              />
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </section>
 
-      {/* Detail Expense Modal */}
-      {showDetailModal && selectedExpense && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-bg-card border border-slate-800 rounded-2xl shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-neon-rose to-neon-amber" />
-            
-            <div className="p-6 flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-display font-extrabold text-base text-slate-100 uppercase tracking-wider">{selectedExpense.title}</h3>
-                <button
-                  onClick={() => setShowDetailModal(false)}
-                  className="p-1 rounded-lg text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+      {/* New claim */}
+      <Modal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="New expense claim"
+        description="Claims go to a manager for review."
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowCreateModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="create-expense-form" variant="primary" loading={submitting} data-testid="expense-submit">
+              Submit claim
+            </Button>
+          </>
+        }
+      >
+        <form id="create-expense-form" onSubmit={handleCreateExpense} className="flex flex-col gap-5">
+          <ReceiptScanner
+            disabled={submitting}
+            onApply={({ title: t, amount: a, category: c }) => {
+              if (t) setTitle(t);
+              if (a) setAmount(a);
+              if (c) setCategory(c);
+            }}
+          />
+          <ExpenseFields
+            title={title}
+            setTitle={setTitle}
+            category={category}
+            setCategory={setCategory}
+            amount={amount}
+            setAmount={setAmount}
+          />
+        </form>
+      </Modal>
 
-              <div className="flex flex-col gap-2.5 text-xs text-slate-300 border-t border-b border-slate-900/80 py-4 font-mono">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Claim ID:</span>
-                  <span className="font-bold text-slate-200">EXP-{selectedExpense.id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Amount:</span>
-                  <span className="font-bold text-slate-100">${selectedExpense.amount.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Category:</span>
-                  <span className="text-slate-200">{selectedExpense.category}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Status:</span>
-                  <span className="font-bold text-neon-amber">{selectedExpense.status}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Submitted By:</span>
-                  <span className="text-slate-200">{selectedExpense.submitted_by?.first_name || "Agent"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Submission Date:</span>
-                  <span className="text-slate-400">{new Date(selectedExpense.created_at).toLocaleString()}</span>
-                </div>
-              </div>
+      {/* Edit claim */}
+      <Modal
+        open={showEditModal && !!selectedExpense}
+        onClose={() => setShowEditModal(false)}
+        title="Edit claim"
+        description="You can edit a claim while it's still pending."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowEditModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="edit-expense-form" variant="primary" loading={submitting} data-testid="expense-update">
+              Save changes
+            </Button>
+          </>
+        }
+      >
+        <form id="edit-expense-form" onSubmit={handleUpdateExpense}>
+          <ExpenseFields
+            title={title}
+            setTitle={setTitle}
+            category={category}
+            setCategory={setCategory}
+            amount={amount}
+            setAmount={setAmount}
+            testIds={false}
+          />
+        </form>
+      </Modal>
 
-              <button
-                onClick={() => setShowDetailModal(false)}
-                className="w-full mt-2 rounded-xl py-2.5 bg-slate-900 text-slate-300 font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all cursor-pointer"
-              >
-                Close View
-              </button>
-            </div>
+      {/* Claim details */}
+      <Modal
+        open={showDetailModal && !!selectedExpense}
+        onClose={() => setShowDetailModal(false)}
+        title={selectedExpense?.title}
+        description={selectedExpense ? `EXP-${selectedExpense.id}` : undefined}
+        size="sm"
+        footer={
+          <Button variant="secondary" onClick={() => setShowDetailModal(false)}>
+            Close
+          </Button>
+        }
+      >
+        {selectedExpense && (
+          <div>
+            <p className="num text-[2rem] font-semibold leading-none text-fg">{formatMoney(selectedExpense.amount)}</p>
+            <dl className="mt-5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3 text-sm">
+              <dt className="text-fg-subtle">Status</dt>
+              <dd className="text-right">
+                <StatusBadge status={selectedExpense.status} />
+              </dd>
+              <dt className="text-fg-subtle">Category</dt>
+              <dd className="flex items-center justify-end gap-1.5 text-fg">
+                <CategoryIcon category={selectedExpense.category} size={14} />
+                {selectedExpense.category}
+              </dd>
+              <dt className="text-fg-subtle">Submitted by</dt>
+              <dd className="truncate text-right text-fg">{selectedExpense.submitted_by?.first_name || "Unknown"}</dd>
+              <dt className="text-fg-subtle">Submitted on</dt>
+              <dd className="text-right text-fg">{new Date(selectedExpense.created_at).toLocaleString()}</dd>
+            </dl>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
-      {/* Delete Expense Modal */}
-      {showDeleteModal && selectedExpense && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-bg-card border border-slate-800 rounded-2xl shadow-2xl p-6 flex flex-col gap-4 text-center">
-            <div className="w-12 h-12 rounded-full bg-neon-rose/10 border border-neon-rose/20 text-neon-rose flex items-center justify-center mx-auto text-xl font-bold">
-              <Trash2 className="w-6 h-6" />
-            </div>
-            <h3 className="font-display font-extrabold text-slate-100 text-base uppercase tracking-wider">Delete Expense Claim?</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Are you sure you want to delete <span className="text-slate-200 font-bold">"{selectedExpense.title}"</span> (${selectedExpense.amount.toFixed(2)})? This action cannot be undone.
-            </p>
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-300 text-xs font-bold uppercase tracking-wider hover:bg-slate-800 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteExpense}
-                disabled={submitting}
-                className="flex-1 py-2.5 rounded-xl border border-neon-rose/30 bg-neon-rose text-white text-xs font-bold uppercase tracking-wider hover:bg-neon-rose/90 cursor-pointer disabled:opacity-50"
-              >
-                {submitting ? <Spinner size="sm" color="white" /> : "Confirm Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete confirmation */}
+      <Modal
+        open={showDeleteModal && !!selectedExpense}
+        onClose={() => setShowDeleteModal(false)}
+        title="Delete this claim?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" icon={Trash} loading={submitting} onClick={handleDeleteExpense} data-testid="confirm-delete">
+              Delete claim
+            </Button>
+          </>
+        }
+      >
+        {selectedExpense && (
+          <p className="text-sm leading-relaxed text-fg-muted">
+            <span className="font-semibold text-fg">{selectedExpense.title}</span> for{" "}
+            <span className="num font-semibold text-fg">{formatMoney(selectedExpense.amount)}</span> will be removed. This can't be
+            undone.
+          </p>
+        )}
+      </Modal>
     </div>
   );
 };

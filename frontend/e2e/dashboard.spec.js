@@ -33,34 +33,27 @@ test.describe('Dashboard', () => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    // The 4 KPI cards should be present (XP, Tasks, Expenses, Ledger)
-    // They all display numeric or text values
-    const xpCard = page.getByText(/Accrued Experience/i);
-    await expect(xpCard).toBeVisible({ timeout: 8000 });
-
-    const opsCard = page.getByText(/Operations Completed/i);
-    await expect(opsCard).toBeVisible();
-
-    const expCard = page.getByText(/Expense Submissions/i);
-    await expect(expCard).toBeVisible();
-
-    const ledgerCard = page.getByText(/Disbursed Ledger/i);
-    await expect(ledgerCard).toBeVisible();
+    // The 4 KPI tiles: tasks done, open tasks, pending claims, approved spend
+    for (const id of ['kpi-completed', 'kpi-open', 'kpi-pending', 'kpi-approved']) {
+      await expect(page.getByTestId(id)).toBeVisible({ timeout: 8000 });
+    }
+    // XP progress panel
+    await expect(page.getByTestId('xp-panel')).toBeVisible();
   });
 
-  test('TC-DASH-03: Activity feed (operations pipeline) section renders', async ({ page }) => {
+  test('TC-DASH-03: Open tasks section renders', async ({ page }) => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    const pipelineSection = page.getByText(/Assigned Operations Pipeline/i);
-    await expect(pipelineSection).toBeVisible({ timeout: 8000 });
+    const openTasks = page.getByRole('heading', { name: /open tasks/i });
+    await expect(openTasks).toBeVisible({ timeout: 8000 });
   });
 
   test('TC-DASH-04: Achievements section renders', async ({ page }) => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    const achievementsSection = page.getByText(/Achievements/i);
+    const achievementsSection = page.getByRole('heading', { name: 'Achievements' });
     await expect(achievementsSection).toBeVisible({ timeout: 8000 });
   });
 
@@ -68,9 +61,9 @@ test.describe('Dashboard', () => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    // Welcome banner should say the user's name
-    await expect(page.locator('body')).toContainText(/Welcome Back, Agent/i, { timeout: 8000 });
-    await expect(page.locator('body')).toContainText(/Admin/i);
+    // Greeting heading says the user's name, with their role underneath
+    await expect(page.locator('h1')).toContainText(/Good (morning|afternoon|evening), Admin/i, { timeout: 8000 });
+    await expect(page.locator('main')).toContainText(/Admin · Level/i);
   });
 
   test('TC-DASH-06: No failed network requests on dashboard load', async ({ page }) => {
@@ -85,5 +78,15 @@ test.describe('Dashboard', () => {
     await page.waitForLoadState('networkidle');
 
     expect(failedRequests).toHaveLength(0);
+  });
+
+  test('TC-DASH-07: Insights row shows forecast, projects at risk, workload and spend', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('heading', { name: 'Insights' })).toBeVisible({ timeout: 8000 });
+    for (const id of ['insight-forecast', 'insight-projects', 'insight-workload', 'insight-spend']) {
+      await expect(page.getByTestId(id)).toBeVisible();
+    }
+    await expect(page.getByTestId('insight-spend')).toContainText('$');
   });
 });

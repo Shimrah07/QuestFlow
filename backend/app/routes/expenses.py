@@ -6,6 +6,7 @@ from app.core.deps import get_db, get_current_user, check_role
 from app.models.expense import Expense
 from app.models.user import User
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate, ExpenseOut, ExpenseStatusUpdate
+from app.services.notification_service import NotificationService
 
 router = APIRouter()
 
@@ -87,6 +88,7 @@ def create_expense(
     db.add(expense)
     db.commit()
     db.refresh(expense)
+    NotificationService.claim_submitted(db, expense, current_user)
     return expense
 
 @router.put("/{expense_id}", response_model=ExpenseOut)
@@ -153,6 +155,7 @@ def update_expense_status(
     expense.status = schema.status
     db.commit()
     db.refresh(expense)
+    NotificationService.claim_decided(db, expense, current_user)
     return expense
 
 @router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -179,6 +182,7 @@ def delete_expense(
             detail="Access Denied: Expense claims can only be deleted by their owner while Pending, or by an Admin."
         )
 
+    NotificationService.remove_for_entity(db, f"claim-{expense.id}-", commit=False)
     db.delete(expense)
     db.commit()
     return None

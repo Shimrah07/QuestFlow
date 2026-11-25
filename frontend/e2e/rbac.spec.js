@@ -143,4 +143,48 @@ test.describe('RBAC - Role-Based Access Control', () => {
     const expenses = await listRes.json();
     expect(expenses.every((e) => e.title !== 'Admin Private Expense')).toBe(true);
   });
+
+  // ─── Shell / UI-level RBAC ──────────────────────────────────────────────────
+
+  test('TC-RBAC-16: Manager sees an access-denied toast when redirected from /admin/users', async ({ page }) => {
+    await loginAs(page, 'Manager');
+    await page.goto('/admin/users');
+    await expect(page).toHaveURL(/dashboard/, { timeout: 5000 });
+    await expect(page.getByText("Your Manager role doesn't have access to that page.")).toBeVisible({ timeout: 5000 });
+  });
+
+  test('TC-RBAC-17: Navigation only shows links the role can open', async ({ page }) => {
+    await loginAs(page, 'Employee');
+    const nav = page.getByRole('navigation', { name: 'Main' });
+    for (const label of ['Dashboard', 'Tasks', 'Expenses', 'Leaderboard']) {
+      await expect(nav.getByRole('link', { name: label, exact: true })).toBeVisible();
+    }
+    for (const label of ['Approvals', 'Users', 'Projects', 'Reports']) {
+      await expect(nav.getByRole('link', { name: new RegExp(`^${label}`) })).toHaveCount(0);
+    }
+
+    // A signed-in user is bounced away from /login, so clear the session before switching roles.
+    await page.evaluate(() => localStorage.clear());
+    await loginAs(page, 'Admin');
+    const adminNav = page.getByRole('navigation', { name: 'Main' });
+    for (const label of ['Users', 'Projects', 'Reports']) {
+      await expect(adminNav.getByRole('link', { name: label, exact: true })).toBeVisible();
+    }
+    await expect(adminNav.getByRole('link', { name: /^Approvals/ })).toBeVisible();
+  });
+
+  test('TC-RBAC-18: Signing out from the profile menu returns to /login', async ({ page }) => {
+    await loginAs(page, 'Admin');
+    await page.getByTestId('profile-menu').click();
+    await page.getByRole('menuitem', { name: 'Sign out' }).click();
+    await expect(page).toHaveURL(/login/, { timeout: 8000 });
+  });
+
+  test('TC-RBAC-19: Admin users page exposes role and status controls', async ({ page }) => {
+    await loginAs(page, 'Admin');
+    await page.goto('/admin/users');
+    await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('[data-testid^="user-role-"]').first()).toBeVisible();
+    await expect(page.locator('[data-testid^="user-status-"]').first()).toHaveAttribute('role', 'switch');
+  });
 });

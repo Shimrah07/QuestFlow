@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from fastapi import HTTPException, status
 from app.models.user import User, RefreshToken
+from app.services.notification_service import NotificationService
 from app.schemas.auth import (
     UserRegister,
     UserLogin,
@@ -134,6 +135,7 @@ class AuthService:
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
+        NotificationService.welcome(db, new_user)
         return new_user
 
     @staticmethod

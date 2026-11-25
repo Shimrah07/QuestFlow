@@ -1,58 +1,34 @@
 import React from "react";
-import { motion } from "framer-motion";
 
+/**
+ * Surface container. `interactive` (or legacy `hoverEffect` + onClick) adds a hover lift.
+ * `glowColor` is accepted for backwards compatibility and ignored.
+ */
 const Card = ({
   children,
   className = "",
-  glowColor = "violet", // "violet" | "emerald" | "amber" | "rose" | "none"
-  hoverEffect = true,
+  padding = "p-5 sm:p-6",
+  interactive,
+  hoverEffect = false,
   onClick,
+  as: Comp = "div",
+  // eslint-disable-next-line no-unused-vars
+  glowColor,
+  ...props
 }) => {
-  const getGlowStyles = () => {
-    switch (glowColor) {
-      case "violet":
-        return "hover:border-neon-violet/40 hover:shadow-[0_0_20px_rgba(139,92,246,0.15)]";
-      case "emerald":
-        return "hover:border-neon-emerald/40 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]";
-      case "amber":
-        return "hover:border-neon-amber/40 hover:shadow-[0_0_20px_rgba(245,158,11,0.15)]";
-      case "rose":
-        return "hover:border-neon-rose/40 hover:shadow-[0_0_20px_rgba(244,63,94,0.15)]";
-      default:
-        return "hover:border-slate-800";
-    }
-  };
-
-  const getStaticBorder = () => {
-    switch (glowColor) {
-      case "violet":
-        return "border-neon-violet/10";
-      case "emerald":
-        return "border-neon-emerald/10";
-      case "amber":
-        return "border-neon-amber/10";
-      case "rose":
-        return "border-neon-rose/10";
-      default:
-        return "border-slate-800/40";
-    }
-  };
-
+  const lift = interactive ?? (hoverEffect && !!onClick);
   return (
-    <motion.div
+    <Comp
       onClick={onClick}
-      whileHover={hoverEffect ? { y: -4, scale: 1.01 } : {}}
-      transition={{ duration: 0.2 }}
-      className={`
-        glass-card rounded-2xl p-6 border text-slate-100 transition-all duration-300
-        ${getStaticBorder()}
-        ${hoverEffect ? getGlowStyles() : ""}
-        ${onClick ? "cursor-pointer" : ""}
-        ${className}
-      `}
+      className={`surface ${padding} ${
+        lift
+          ? "transition-[transform,border-color] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] [@media(hover:hover)]:hover:-translate-y-0.5 [@media(hover:hover)]:hover:border-line-strong"
+          : ""
+      } ${onClick ? "cursor-pointer" : ""} ${className}`}
+      {...props}
     >
       {children}
-    </motion.div>
+    </Comp>
   );
 };
 

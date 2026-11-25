@@ -1,18 +1,85 @@
+/*
+ * Dashboard. One question at first glance: "what needs my attention, and how am I progressing?"
+ * Numbers are the same ones as before (all visible tasks, role-filtered expenses, the user's XP);
+ * the open-task list now prefers the signed-in user's own work and flags overdue items in place.
+ */
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  ArrowRight,
+  CheckCircle,
+  Kanban,
+  Hourglass,
+  Wallet,
+  Lightning,
+  WarningCircle,
+  CalendarBlank,
+  Trophy,
+} from "@phosphor-icons/react";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
-import Card from "../../components/common/Card";
-import Spinner from "../../components/common/Spinner";
 import { useToast } from "../../context/ToastContext";
 import {
-  Trophy,
-  CheckCircle2,
-  Hourglass,
-  DollarSign,
-  ArrowRight,
-  TrendingUp
-} from "lucide-react";
-import { Link } from "react-router-dom";
+  ProgressRing,
+  XpMeter,
+  levelProgress,
+  StatusBadge,
+  EmptyState,
+  Skeleton,
+  Stagger,
+  StaggerItem,
+  formatMoney,
+  formatDate,
+} from "../../components/ui/primitives";
+import { getAchievements } from "../gamification/achievements";
+import InsightsPanel from "../../components/dashboard/InsightsPanel";
+import QuestsCard from "../../components/dashboard/QuestsCard";
+
+const greeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+};
+
+const isOverdue = (t) => t.due_date && t.status !== "Completed" && new Date(t.due_date) < new Date();
+
+/** KPI tile: label, number, one-word baseline. An optional action link sits on the tile itself. */
+const Kpi = ({ label, value, baseline, icon: Icon, tone, action, testId }) => (
+  <div data-testid={testId} className="surface flex min-w-0 flex-col justify-between gap-5 p-4 sm:p-5">
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[0.8125rem] font-medium text-fg-muted">{label}</span>
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] border border-line bg-surface-2 text-fg-subtle">
+        <Icon size={16} weight="bold" />
+      </span>
+    </div>
+    <div className="min-w-0">
+      <p className={`num truncate text-[1.75rem] font-semibold leading-none tracking-tight ${tone === "attention" ? "text-accent-text" : "text-fg"}`}>{value}</p>
+      <div className="mt-2 flex min-h-5 items-center justify-between gap-2 text-xs text-fg-subtle">
+        <span className="truncate">{baseline}</span>
+        {action}
+      </div>
+    </div>
+  </div>
+);
+
+const DashboardSkeleton = () => (
+  <div className="flex flex-col gap-6" aria-busy="true" aria-label="Loading dashboard">
+    <Skeleton className="h-9 w-72" />
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+      <Skeleton className="h-56 !rounded-2xl lg:col-span-5" />
+      <div className="grid grid-cols-2 gap-4 lg:col-span-7">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-[6.5rem] !rounded-2xl sm:h-32" />
+        ))}
+      </div>
+    </div>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+      <Skeleton className="h-72 !rounded-2xl lg:col-span-8" />
+      <Skeleton className="h-72 !rounded-2xl lg:col-span-4" />
+    </div>
+  </div>
+);
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -20,239 +87,255 @@ const Dashboard = () => {
 
   const [tasks, setTasks] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [quests, setQuests] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        const [tasksRes, expensesRes] = await Promise.all([
+        const [tasksRes, expensesRes, questsRes] = await Promise.all([
           api.get("/tasks"),
-          api.get("/expenses").catch(() => ({ data: [] }))
+          api.get("/expenses").catch(() => ({ data: [] })),
+          api.get("/quests/").catch(() => ({ data: null })),
         ]);
         setTasks(tasksRes.data);
         setExpenses(expensesRes.data || []);
-      } catch (error) {
-        showToast("Error retrieving dashboard summary.", "error");
+        setQuests(questsRes.data);
+      } catch {
+        showToast("Couldn't load your dashboard. Refresh to try again.", "error");
       } finally {
         setLoading(false);
       }
     };
     fetchDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <Spinner size="lg" color="violet" />
-      </div>
-    );
-  }
+  if (loading) return <DashboardSkeleton />;
 
-  // Calculate dynamic stats
+  // Same figures as the previous dashboard
   const completedTasks = tasks.filter((t) => t.status === "Completed");
   const activeTasks = tasks.filter((t) => t.status === "In Progress" || t.status === "Todo");
-  
+  const overdueTasks = activeTasks.filter(isOverdue);
+
   const pendingExpenses = expenses.filter((e) => e.status === "Pending");
   const approvedExpenses = expenses.filter((e) => e.status === "Approved");
   const totalApprovedLedger = approvedExpenses.reduce((sum, e) => sum + e.amount, 0);
   const totalPendingLedger = pendingExpenses.reduce((sum, e) => sum + e.amount, 0);
 
-  const stats = [
-    {
-      label: "Accrued Experience",
-      value: `${user?.points || 0} XP`,
-      subtext: `Level ${user?.level || 1} Operator`,
-      icon: Trophy,
-      color: "violet",
-    },
-    {
-      label: "Operations Completed",
-      value: `${completedTasks.length}`,
-      subtext: `${activeTasks.length} Active pipeline operations`,
-      icon: CheckCircle2,
-      color: "emerald",
-    },
-    {
-      label: "Expense Submissions",
-      value: `${pendingExpenses.length} Pending`,
-      subtext: `${approvedExpenses.length} Claims approved`,
-      icon: Hourglass,
-      color: "amber",
-    },
-    {
-      label: "Disbursed Ledger",
-      value: `$${totalApprovedLedger.toFixed(2)}`,
-      subtext: `$${totalPendingLedger.toFixed(2)} under audit review`,
-      icon: DollarSign,
-      color: "rose",
-    },
-  ];
+  const canReview = user?.role === "Admin" || user?.role === "Manager";
+  const points = user?.points || 0;
+  const level = user?.level || 1;
+  const { inLevel, pct, toNext } = levelProgress(points);
 
-  // Get top 3 tasks for display
-  const recentTasks = tasks.slice(-3).reverse();
+  // Open work: the user's own first; managers/admins without assignments see the latest open tasks.
+  const byDue = (a, b) => new Date(a.due_date || "9999-12-31") - new Date(b.due_date || "9999-12-31");
+  const mine = activeTasks.filter((t) => t.assigned_to_id === user?.id).sort(byDue);
+  const showingMine = mine.length > 0 || user?.role === "Employee";
+  const openList = (showingMine ? mine : [...activeTasks].sort(byDue)).slice(0, 5);
+  const myCompleted = completedTasks.filter((t) => t.assigned_to_id === user?.id).length;
+
+  const achievements = getAchievements(user);
+  const unlocked = achievements.filter((a) => a.unlocked).length;
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* Welcome Banner */}
-      <div className="relative p-8 rounded-2xl border border-neon-violet/10 bg-gradient-to-r from-bg-panel/80 via-slate-900/50 to-bg-panel/30 overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-full bg-neon-violet/5 blur-[80px] pointer-events-none" />
-        
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
-          <div className="flex flex-col gap-2">
-            <span className="text-[10px] font-bold tracking-widest text-neon-violet uppercase">
-              System Dashboard Grid
-            </span>
-            <h1 className="text-3xl font-display font-extrabold text-slate-100">
-              Welcome Back, Agent {user?.first_name}
-            </h1>
-            <p className="text-sm text-slate-400">
-              Workspace connection verified. Access Tier: {user?.role}. Operational cycle is active.
-            </p>
-          </div>
+    <Stagger className="flex flex-col gap-6 lg:gap-8">
+      {/* Header */}
+      <StaggerItem className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="display text-[1.75rem] font-semibold leading-[1.1] text-fg sm:text-[2rem]">
+            {greeting()}, {user?.first_name}
+          </h1>
+          <p className="mt-2 text-[0.9375rem] text-fg-muted">
+            {user?.role} · Level {level}
+          </p>
         </div>
-      </div>
-
-      {/* Grid of HUD Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, idx) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={idx} glowColor={stat.color} className="relative overflow-hidden bg-bg-card">
-              <div className="flex items-start justify-between">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    {stat.label}
-                  </span>
-                  <span className="text-2xl font-display font-extrabold text-slate-100 mt-1">
-                    {stat.value}
-                  </span>
-                  <span className="text-xs text-slate-400 mt-1">
-                    {stat.subtext}
-                  </span>
-                </div>
-                <div className={`p-2.5 rounded-lg border bg-slate-950/40 border-slate-900/60 text-neon-${stat.color}`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Grid layout for further components */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Task Activity Summary List */}
-        <Card glowColor="none" hoverEffect={false} className="lg:col-span-2 bg-bg-card border-slate-900/60">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-display font-bold text-sm tracking-wider uppercase text-slate-200">
-              Assigned Operations Pipeline
-            </h3>
-            <Link to="/tasks" className="text-[10px] font-bold text-neon-violet hover:underline flex items-center gap-1 uppercase tracking-wider">
-              See Board <ArrowRight className="w-3 h-3" />
+        <div className="flex flex-wrap gap-2">
+          {canReview && pendingExpenses.length > 0 && (
+            <Link to="/approvals" className="btn btn-secondary">
+              <Hourglass size={17} weight="bold" />
+              Review claims
+              <span className="num rounded-[6px] bg-accent px-1.5 py-0.5 text-[0.6875rem] font-semibold text-accent-ink">{pendingExpenses.length}</span>
             </Link>
-          </div>
-
-          {recentTasks.length === 0 ? (
-            <div className="text-center py-8 text-slate-500 font-sans text-xs">
-              No tasks currently deployed in this sector.
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {recentTasks.map((task, idx) => (
-                <div key={idx} className="flex justify-between items-center p-3 rounded-xl border border-slate-900/40 bg-slate-950/20 hover:border-slate-800/60 transition-all duration-300">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${
-                      task.status === "Todo" ? "bg-neon-amber" : 
-                      task.status === "In Progress" ? "bg-neon-violet" : 
-                      "bg-neon-emerald"
-                    }`} />
-                    <div className="flex flex-col">
-                      <span className="text-xs font-semibold text-slate-300 pr-2">{task.title}</span>
-                      <span className="text-[10px] text-slate-500 font-mono mt-0.5">Status: {task.status}</span>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-neon-violet/10 border border-neon-violet/25 text-neon-violet font-mono uppercase tracking-wider">
-                    {task.xp} XP
-                  </span>
-                </div>
-              ))}
-            </div>
           )}
-        </Card>
+          <Link to="/tasks" className="btn btn-primary">
+            <Kanban size={17} weight="bold" />
+            Open task board
+          </Link>
+        </div>
+      </StaggerItem>
 
-        {/* Gamified Achievements Spotlight panel */}
-        <Card glowColor="none" hoverEffect={false} className="bg-bg-card border-slate-900/60 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display font-bold text-sm tracking-wider uppercase text-slate-200">
-                Achievements Radar
-              </h3>
-              <Link to="/leaderboard" className="text-[10px] font-bold text-neon-violet hover:underline uppercase tracking-wider flex items-center gap-1">
-                Gallery <ArrowRight className="w-3 h-3" />
+      {/* Progress + KPIs */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <StaggerItem className="relative overflow-hidden surface p-5 sm:p-6 lg:col-span-5" >
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full opacity-70 blur-3xl"
+            style={{ background: "radial-gradient(closest-side, color-mix(in oklab, var(--accent) 22%, transparent), transparent)" }}
+          />
+          <div className="relative flex h-full flex-col justify-between gap-6" data-testid="xp-panel">
+            <div className="flex items-center justify-between">
+              <span className="text-[0.8125rem] font-medium text-fg-muted">Your progress</span>
+              <Link to="/gamification" className="inline-flex items-center gap-1 text-xs font-medium text-fg-subtle transition-colors hover:text-fg">
+                Leaderboard <ArrowRight size={12} weight="bold" />
               </Link>
             </div>
-
-            <div className="flex flex-col gap-3">
-              {[
-                {
-                  title: "First Ascent",
-                  desc: "Achieved Level 2 clearance",
-                  unlocked: (user?.level || 1) >= 2,
-                  icon: "⛰️",
-                },
-                {
-                  title: "Bug Squash Commando",
-                  desc: "Accumulated 300+ XP",
-                  unlocked: (user?.points || 0) >= 300,
-                  icon: "🐞",
-                },
-                {
-                  title: "Financial Architect",
-                  desc: "Accumulated 1000+ XP",
-                  unlocked: (user?.points || 0) >= 1000,
-                  icon: "🏦",
-                },
-                {
-                  title: "Ledger Sentinel",
-                  desc: "Manager or Admin role",
-                  unlocked: user?.role === "Manager" || user?.role === "Admin",
-                  icon: "🛡️",
-                },
-              ].map((badge, idx) => (
-                <div
-                  key={idx}
-                  className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all duration-300 ${
-                    badge.unlocked
-                      ? "border-neon-violet/20 bg-neon-violet/5 text-slate-200"
-                      : "border-slate-900/60 bg-slate-950/40 opacity-45"
-                  }`}
-                >
-                  <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                      badge.unlocked
-                        ? "bg-neon-violet/10 border border-neon-violet/20"
-                        : "bg-slate-900 border border-slate-800"
-                    }`}
-                  >
-                    {badge.icon}
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-bold truncate">{badge.title}</span>
-                    <span className="text-[9px] text-slate-400 font-mono truncate">{badge.desc}</span>
-                  </div>
+            <div className="flex items-center gap-5">
+              <ProgressRing value={pct} size={96} stroke={7}>
+                <div className="text-center leading-none">
+                  <span className="block text-[0.625rem] font-medium uppercase tracking-[0.08em] text-fg-subtle">Level</span>
+                  <span className="num mt-1 block text-2xl font-semibold text-fg">{level}</span>
                 </div>
-              ))}
+              </ProgressRing>
+              <div className="min-w-0">
+                <p className="num text-[2.25rem] font-semibold leading-none tracking-tight text-fg">
+                  {points.toLocaleString()}
+                  <span className="ml-1.5 text-base font-medium text-fg-subtle">XP</span>
+                </p>
+                <p className="mt-2 flex items-center gap-1.5 text-sm text-fg-muted">
+                  <Lightning size={14} weight="fill" className="text-accent-text" />
+                  <span className="num">{toNext}</span> XP to level {level + 1}
+                </p>
+              </div>
+            </div>
+            <div>
+              <XpMeter points={points} />
+              <div className="mt-2 flex justify-between text-xs text-fg-subtle">
+                <span className="num">{inLevel}/500</span>
+                <span>
+                  <span className="num">{myCompleted}</span> tasks finished
+                </span>
+              </div>
             </div>
           </div>
+        </StaggerItem>
 
-          <div className="mt-4 pt-3 border-t border-slate-900/60 flex items-center justify-between text-xs text-slate-500 font-mono">
-            <span className="flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-neon-emerald" /> Radar Active</span>
-            <span className="text-[10px] text-neon-emerald font-bold uppercase">Live Sync</span>
-          </div>
-        </Card>
+        <StaggerItem className="grid grid-cols-2 gap-3 sm:gap-4 lg:col-span-7">
+          <Kpi testId="kpi-completed" label="Tasks done" value={completedTasks.length} baseline={user?.role === "Employee" ? `of ${tasks.length} assigned to you` : `of ${tasks.length} total`} icon={CheckCircle} />
+          <Kpi
+            testId="kpi-open"
+            label="Open tasks"
+            value={activeTasks.length}
+            icon={Kanban}
+            tone={overdueTasks.length ? "attention" : undefined}
+            baseline={overdueTasks.length ? `${overdueTasks.length} overdue` : "none overdue"}
+          />
+          <Kpi
+            testId="kpi-pending"
+            label="Pending claims"
+            value={pendingExpenses.length}
+            icon={Hourglass}
+            tone={canReview && pendingExpenses.length ? "attention" : undefined}
+            baseline={formatMoney(totalPendingLedger)}
+            action={
+              canReview && pendingExpenses.length > 0 ? (
+                <Link to="/approvals" className="inline-flex shrink-0 items-center gap-1 font-medium text-accent-text hover:underline underline-offset-4">
+                  Review <ArrowRight size={11} weight="bold" />
+                </Link>
+              ) : null
+            }
+          />
+          <Kpi testId="kpi-approved" label="Approved spend" value={formatMoney(totalApprovedLedger)} baseline={`${approvedExpenses.length} claims`} icon={Wallet} />
+        </StaggerItem>
       </div>
-    </div>
+
+      {/* Insights (computed in the browser from the data above) */}
+      <StaggerItem>
+        <InsightsPanel user={user} tasks={tasks} expenses={expenses} />
+      </StaggerItem>
+
+      {/* Open work + achievements */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <StaggerItem className="surface flex flex-col lg:col-span-8 lg:self-start">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4 sm:px-6">
+            <h2 className="text-[0.9375rem] font-semibold text-fg">{showingMine ? "Your open tasks" : "Open tasks"}</h2>
+            <Link to="/tasks" className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-fg-muted transition-colors hover:text-fg">
+              View board <ArrowRight size={13} weight="bold" />
+            </Link>
+          </div>
+          {openList.length === 0 ? (
+            <EmptyState
+              icon={CheckCircle}
+              title={showingMine ? "Nothing on your plate" : "No open tasks"}
+              description={showingMine ? "New tasks assigned to you will show up here." : "Create a task from the board to get the team moving."}
+              className="flex-1"
+            />
+          ) : (
+            <ul className="flex flex-col p-2">
+              {openList.map((task) => {
+                const overdue = isOverdue(task);
+                return (
+                  <li key={task.id}>
+                    <Link to="/tasks" className="row-hover flex items-center gap-3 rounded-[12px] px-3 py-3 sm:gap-4">
+                      <StatusBadge status={task.status} className="hidden w-[5.5rem] justify-center sm:inline-flex" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-fg">{task.title}</p>
+                        <p className="mt-0.5 flex items-center gap-2 truncate text-xs text-fg-subtle">
+                          <span className="sm:hidden">{task.status === "In Progress" ? "In progress" : "To do"}</span>
+                          {task.project?.name && <span className="truncate">{task.project.name}</span>}
+                          {!showingMine && task.assigned_to?.first_name && <span className="truncate">{task.assigned_to.first_name}</span>}
+                        </p>
+                      </div>
+                      {task.due_date && (
+                        <span className={`hidden shrink-0 items-center gap-1 text-xs sm:inline-flex ${overdue ? "font-medium text-danger" : "text-fg-subtle"}`}>
+                          {overdue ? <WarningCircle size={13} weight="fill" /> : <CalendarBlank size={13} />}
+                          {overdue ? "Overdue" : formatDate(task.due_date)}
+                        </span>
+                      )}
+                      <span className="num w-16 shrink-0 text-right text-[0.8125rem] font-semibold text-accent-text">+{task.xp}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </StaggerItem>
+
+        <StaggerItem className="flex flex-col gap-4 lg:col-span-4">
+          <QuestsCard board={quests} />
+          <div className="surface flex flex-1 flex-col">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
+            <h2 className="text-[0.9375rem] font-semibold text-fg">Achievements</h2>
+            <span className="num text-xs text-fg-subtle">
+              {unlocked}/{achievements.length}
+            </span>
+          </div>
+          <ul className="flex flex-1 flex-col gap-1 p-2">
+            {achievements.map((a) => {
+              const Icon = a.icon;
+              return (
+                <li key={a.id} className="flex items-center gap-3 rounded-[12px] px-3 py-2.5">
+                  <span
+                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border ${
+                      a.unlocked ? "border-accent/30 bg-accent/12 text-accent-text" : "border-line bg-surface-2 text-fg-subtle"
+                    }`}
+                  >
+                    <Icon size={18} weight={a.unlocked ? "fill" : "regular"} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className={`truncate text-sm font-medium ${a.unlocked ? "text-fg" : "text-fg-muted"}`}>{a.title}</p>
+                      <span className="num shrink-0 text-[0.6875rem] text-fg-subtle">{a.unlocked ? "Unlocked" : a.meta}</span>
+                    </div>
+                    <div className="mt-1.5 h-[3px] overflow-hidden rounded-full bg-surface-3">
+                      <div className={`h-full rounded-full ${a.unlocked ? "bg-accent" : "bg-fg-subtle/60"}`} style={{ width: `${a.progress * 100}%` }} />
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="border-t border-line px-5 py-3">
+            <Link to="/gamification" className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-fg-muted transition-colors hover:text-fg">
+              <Trophy size={14} weight="bold" />
+              See team standings
+            </Link>
+          </div>
+          </div>
+        </StaggerItem>
+      </div>
+    </Stagger>
   );
 };
 

@@ -1,43 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128" fill="none">
   <defs>
-    <linearGradient id="questflowGradient" x1="16" y1="16" x2="112" y2="112" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#4F46E5"/>
-      <stop offset="50%" stop-color="#7C3AED"/>
-      <stop offset="100%" stop-color="#EC4899"/>
+    <linearGradient id="qfTile" x1="16" y1="8" x2="112" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F7BB5C"/>
+      <stop offset="1" stop-color="#E8922A"/>
     </linearGradient>
-
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.18"/>
-    </filter>
   </defs>
-
-  <rect
-    x="8"
-    y="8"
-    width="112"
-    height="112"
-    rx="28"
-    fill="url(#questflowGradient)"
-    filter="url(#shadow)"
-  />
-
-  <path
-    d="M64 28
-       C45 28 32 41 32 60
-       C32 79 45 92 64 92
-       C70 92 76 90 81 86
-       L91 96
-       L98 89
-       L88 79
-       C92 74 94 67 94 60
-       C94 41 81 28 64 28
-       Z
-
-       M64 40
-       C76 40 84 48 84 60
-       C84 72 76 80 64 80
-       C52 80 44 72 44 60
-       C44 48 52 40 64 40
-       Z"
-    fill="white"/>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#qfTile)"/>
+  <rect x="8.75" y="8.75" width="110.5" height="110.5" rx="27.25" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="1.5"/>
+  <path d="M64 28 C45 28 32 41 32 60 C32 79 45 92 64 92 C70 92 76 90 81 86 L91 96 L98 89 L88 79 C92 74 94 67 94 60 C94 41 81 28 64 28 Z M64 40 C76 40 84 48 84 60 C84 72 76 80 64 80 C52 80 44 72 44 60 C44 48 52 40 64 40 Z" fill="#1C1306"/>
 </svg>

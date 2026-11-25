@@ -1,34 +1,33 @@
 import React from "react";
 import { useTheme } from "../../context/ThemeContext";
-import { Sun, Moon } from "lucide-react";
-import { motion } from "framer-motion";
+import { Moon, Sun } from "@phosphor-icons/react";
+import { AnimatePresence, motion } from "framer-motion";
 
+/** Icon button that crossfades between sun and moon with a slight rotation. */
 const ThemeToggle = ({ className = "" }) => {
   const { theme, toggleTheme } = useTheme();
+  const isLight = theme === "light";
 
   return (
     <button
+      type="button"
       onClick={toggleTheme}
-      className={`relative p-2 rounded-lg border border-slate-900 bg-slate-950/40 hover:bg-slate-900/50 hover:border-slate-800 transition-all cursor-pointer group flex items-center justify-center overflow-hidden ${className}`}
-      aria-label="Toggle theme"
+      className={`btn btn-ghost btn-icon relative overflow-hidden ${className}`}
+      aria-label={isLight ? "Switch to dark theme" : "Switch to light theme"}
+      title={isLight ? "Dark theme" : "Light theme"}
     >
-      <motion.div
-        initial={false}
-        animate={{ y: theme === "light" ? 30 : 0, opacity: theme === "light" ? 0 : 1 }}
-        transition={{ type: "spring", stiffness: 200, damping: 15 }}
-        className="text-slate-400 group-hover:text-neon-violet transition-colors"
-      >
-        <Moon className="w-4.5 h-4.5" />
-      </motion.div>
-
-      <motion.div
-        initial={false}
-        animate={{ y: theme === "light" ? 0 : -30, opacity: theme === "light" ? 1 : 0 }}
-        transition={{ type: "spring", stiffness: 200, damping: 15 }}
-        className="absolute text-slate-400 group-hover:text-neon-amber transition-colors"
-      >
-        <Sun className="w-4.5 h-4.5" />
-      </motion.div>
+      <AnimatePresence initial={false} mode="popLayout">
+        <motion.span
+          key={theme}
+          initial={{ opacity: 0, rotate: -60, scale: 0.8, filter: "blur(2px)" }}
+          animate={{ opacity: 1, rotate: 0, scale: 1, filter: "blur(0px)" }}
+          exit={{ opacity: 0, rotate: 60, scale: 0.8, filter: "blur(2px)" }}
+          transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+          className="grid place-items-center"
+        >
+          {isLight ? <Sun size={18} weight="bold" /> : <Moon size={18} weight="bold" />}
+        </motion.span>
+      </AnimatePresence>
     </button>
   );
 };

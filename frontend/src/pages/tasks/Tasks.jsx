@@ -1,14 +1,305 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import {
+  Plus,
+  Play,
+  CheckCircle,
+  PencilSimple,
+  Trash,
+  FolderSimple,
+  CalendarBlank,
+  MagnifyingGlass,
+  Lightning,
+  Circle,
+  CircleHalf,
+  Kanban,
+  Warning,
+  DotsSixVertical,
+} from "@phosphor-icons/react";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  pointerWithin,
+  rectIntersection,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
-import Card from "../../components/common/Card";
-import Spinner from "../../components/common/Spinner";
 import { useToast } from "../../context/ToastContext";
-import { ListTodo, CheckCircle, Flame, Sparkles, User, Folder, Plus, X, ArrowRight, Edit2, Eye, Trash2 } from "lucide-react";
+import Button from "../../components/ui/Button";
+import Field from "../../components/ui/Field";
+import Modal from "../../components/ui/Modal";
+import { TextInput } from "../../components/ui/inputs";
+import TaskAssistantPanel from "../../components/tasks/TaskAssistantPanel";
+import {
+  PageHeader,
+  StatusBadge,
+  Avatar,
+  EmptyState,
+  Skeleton,
+  Segmented,
+  formatDate,
+} from "../../components/ui/primitives";
+
+const COLUMNS = [
+  { key: "Todo", label: "To do", icon: Circle, tone: "text-fg-subtle" },
+  { key: "In Progress", label: "In progress", icon: CircleHalf, tone: "text-info" },
+  { key: "Completed", label: "Done", icon: CheckCircle, tone: "text-success" },
+];
+
+const isOverdue = (task) =>
+  task.due_date && task.status !== "Completed" && new Date(task.due_date).getTime() < Date.now();
+
+/* ---------- Task card ---------- */
+
+const TaskCard = ({ task, canEdit, canDelete, canStart, canComplete, onOpen, onEdit, onDelete, onStart, onComplete, isMine, dragHandle, overlay = false }) => {
+  const done = task.status === "Completed";
+  const overdue = isOverdue(task);
+
+  return (
+    <motion.article
+      layout={overlay ? false : "position"}
+      data-testid={overlay ? undefined : "task-card"}
+      data-task-id={overlay ? undefined : task.id}
+      initial={overlay ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.14 } }}
+      transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
+      className={`group surface-flat relative flex flex-col gap-3 p-4 transition-[border-color] duration-150 hover:border-line-strong ${
+        done ? "bg-surface/60" : ""
+      } ${overlay ? "rotate-[1.5deg] cursor-grabbing !border-accent/50 shadow-[0_18px_40px_-12px_rgb(var(--shadow-color)/0.6)]" : ""}`}
+    >
+      <div className="flex items-start gap-3">
+        {dragHandle}
+        <button
+          type="button"
+          onClick={() => onOpen(task)}
+          className={`min-w-0 flex-1 text-left text-[0.9375rem] font-semibold leading-snug transition-colors hover:text-accent-text ${
+            done ? "text-fg-muted line-through decoration-fg-subtle/50" : "text-fg"
+          }`}
+          title="View details"
+        >
+          {task.title}
+        </button>
+        <span
+          className={`num inline-flex h-6 shrink-0 items-center gap-1 rounded-[6px] px-1.5 text-xs font-semibold ${
+            done ? "bg-success/12 text-success" : "bg-accent/12 text-accent-text"
+          }`}
+        >
+          <Lightning size={12} weight="fill" />
+          {done ? "+" : ""}
+          {task.xp}
+        </span>
+      </div>
+
+      {task.description && !done && (
+        <p className="line-clamp-2 text-[0.8125rem] leading-relaxed text-fg-muted">{task.description}</p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-fg-subtle">
+        {task.project && (
+          <span className="inline-flex min-w-0 max-w-full items-center gap-1">
+            <FolderSimple size={13} className="shrink-0" />
+            <span className="truncate">{task.project.name}</span>
+          </span>
+        )}
+        {task.due_date && (
+          <span className={`inline-flex items-center gap-1 ${overdue ? "font-medium text-danger" : ""}`}>
+            {overdue ? <Warning size={13} weight="fill" /> : <CalendarBlank size={13} />}
+            {overdue ? "Overdue " : "Due "}
+            {formatDate(task.due_date)}
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
+        <span className="inline-flex min-w-0 items-center gap-2 text-xs text-fg-muted">
+          {task.assigned_to ? (
+            <>
+              <Avatar name={task.assigned_to.first_name} size={22} highlight={isMine} />
+              <span className="truncate">{isMine ? "You" : task.assigned_to.first_name}</span>
+            </>
+          ) : (
+            <span className="text-fg-subtle">Unassigned</span>
+          )}
+        </span>
+
+        <div className="flex shrink-0 items-center gap-1">
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(task)}
+              title="Edit task"
+              aria-label={`Edit ${task.title}`}
+              data-testid="task-edit"
+              className="btn btn-ghost btn-sm btn-icon"
+            >
+              <PencilSimple size={15} />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(task)}
+              title="Delete task"
+              aria-label={`Delete ${task.title}`}
+              data-testid="task-delete"
+              className="btn btn-ghost btn-sm btn-icon hover:!text-danger"
+            >
+              <Trash size={15} />
+            </button>
+          )}
+          {task.status === "Todo" && canStart && (
+            <Button size="sm" variant="secondary" icon={Play} onClick={() => onStart(task)} data-testid="task-start" className="ml-1">
+              Start
+            </Button>
+          )}
+          {task.status === "In Progress" && canComplete && (
+            <Button size="sm" variant="primary" icon={CheckCircle} onClick={() => onComplete(task)} data-testid="task-complete" className="ml-1">
+              Complete
+            </Button>
+          )}
+        </div>
+      </div>
+    </motion.article>
+  );
+};
+
+/* ---------- Drag and drop ---------- */
+
+/**
+ * Wraps a card so it can be dragged between columns. Pointer and touch drags start anywhere on the
+ * card (after a few pixels of movement, so clicks still work). Keyboard drags start only from the
+ * grip button, so Enter on "Complete" or "Edit" never picks the card up by accident.
+ */
+// React 19 passes `ref` as a prop; AnimatePresence (popLayout) needs it on this wrapper.
+const DraggableTaskCard = ({ task, draggable, children, ref }) => {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
+    id: task.id,
+    data: { task },
+    disabled: !draggable,
+  });
+  const handleRef = useRef(null);
+  const { onKeyDown, ...pointerListeners } = listeners || {};
+
+  const handle = draggable ? (
+    <button
+      type="button"
+      ref={(node) => {
+        handleRef.current = node;
+        setActivatorNodeRef(node);
+      }}
+      {...attributes}
+      aria-label={`Move "${task.title}". Press space to pick up, arrow keys to move, space to drop.`}
+      data-testid="task-drag-handle"
+      className="-ml-1.5 -mt-0.5 grid h-6 w-5 shrink-0 cursor-grab place-items-center rounded-[5px] text-fg-subtle opacity-40 transition-opacity hover:bg-surface-2 hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
+    >
+      <DotsSixVertical size={16} weight="bold" />
+    </button>
+  ) : null;
+
+  return (
+    <div
+      ref={(node) => {
+        setNodeRef(node);
+        if (typeof ref === "function") ref(node);
+        else if (ref) ref.current = node;
+      }}
+      {...pointerListeners}
+      onKeyDown={(e) => {
+        if (e.target === handleRef.current) onKeyDown?.(e);
+      }}
+      className={`touch-manipulation ${draggable ? "cursor-grab select-none active:cursor-grabbing" : ""} ${isDragging ? "opacity-35" : ""}`}
+      data-dragging={isDragging || undefined}
+    >
+      {children(handle)}
+    </div>
+  );
+};
+
+/** A board column that accepts drops. `state` tints it while a card is in the air. */
+const DroppableColumn = ({ id, children, className, state, ...rest }) => {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  const ring =
+    state === "allowed"
+      ? isOver
+        ? "ring-2 ring-accent/70 bg-accent/[0.06]"
+        : "ring-1 ring-accent/35"
+      : state === "blocked"
+        ? "opacity-55"
+        : "";
+  return (
+    <section
+      ref={setNodeRef}
+      {...rest}
+      data-drop-state={state}
+      data-over={isOver || undefined}
+      className={`${className} transition-[box-shadow,background-color,opacity] duration-150 ${ring}`}
+    >
+      {children}
+    </section>
+  );
+};
+
+const STATUS_LABEL = { Todo: "To do", "In Progress": "In progress", Completed: "Done" };
+
+/**
+ * Keyboard moves for the board: Left and Right jump straight to the neighbouring column
+ * (dnd-kit's default nudges 25px per key press, which never reaches another column).
+ */
+const columnKeyboardCoordinates = (event, { context: { droppableRects, droppableContainers, collisionRect } }) => {
+  if (event.code !== "ArrowLeft" && event.code !== "ArrowRight") return undefined;
+  event.preventDefault();
+  if (!collisionRect) return undefined;
+  const columns = droppableContainers
+    .getEnabled()
+    .map((c) => ({ id: c.id, rect: droppableRects.get(c.id) }))
+    .filter((c) => c.rect && c.rect.width > 0)
+    .sort((a, b) => a.rect.left - b.rect.left);
+  if (!columns.length) return undefined;
+  const centerX = collisionRect.left + collisionRect.width / 2;
+  const current = columns.reduce(
+    (best, c, i) => (Math.abs(c.rect.left + c.rect.width / 2 - centerX) < best.d ? { i, d: Math.abs(c.rect.left + c.rect.width / 2 - centerX) } : best),
+    { i: 0, d: Infinity }
+  ).i;
+  const target = columns[Math.min(columns.length - 1, Math.max(0, current + (event.code === "ArrowRight" ? 1 : -1)))].rect;
+  return { x: target.left + (target.width - collisionRect.width) / 2, y: target.top + 56 };
+};
+
+/* ---------- Loading skeleton ---------- */
+
+const BoardSkeleton = () => (
+  <div className="grid grid-cols-1 gap-5 md:grid-cols-3" aria-busy="true" aria-label="Loading tasks">
+    {COLUMNS.map((c, i) => (
+      <div key={c.key} className={`flex flex-col gap-3 ${i > 0 ? "hidden md:flex" : ""}`}>
+        <Skeleton className="h-5 w-28" />
+        {[0, 1, 2].map((n) => (
+          <div key={n} className="surface-flat flex flex-col gap-3 p-4">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+            <div className="flex items-center justify-between border-t border-line pt-3">
+              <Skeleton className="h-5 w-20" />
+              <Skeleton className="h-7 w-16" />
+            </div>
+          </div>
+        ))}
+      </div>
+    ))}
+  </div>
+);
+
+/* ---------- Page ---------- */
 
 const Tasks = () => {
   const { user, refreshUserProfile } = useAuth();
   const { showToast } = useToast();
+  const reduce = useReducedMotion();
 
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -31,6 +322,15 @@ const Tasks = () => {
   const [status, setStatus] = useState("Todo");
   const [submitting, setSubmitting] = useState(false);
 
+  // View-only filters (client side, do not change data)
+  const [search, setSearch] = useState("");
+  const [scope, setScope] = useState("all");
+  const [mobileColumn, setMobileColumn] = useState("Todo");
+  const [showAllDone, setShowAllDone] = useState(false);
+  // Ids changed during this visit; they sort first so a task you just moved is never hidden.
+  const [touched, setTouched] = useState([]);
+  const markTouched = (id) => id && setTouched((prev) => [id, ...prev.filter((x) => x !== id)]);
+
   const isEmployee = user?.role === "Employee";
   const isManager = user?.role === "Manager";
   const isAdmin = user?.role === "Admin";
@@ -52,9 +352,10 @@ const Tasks = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      // Employees can't list projects (the API returns 403) and never need the picker, so skip it.
       const [tasksRes, projectsRes] = await Promise.all([
         api.get("/tasks"),
-        api.get("/projects").catch(() => ({ data: [] }))
+        canAssign ? api.get("/projects").catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       ]);
       setTasks(tasksRes.data);
       setProjects(projectsRes.data || []);
@@ -63,15 +364,17 @@ const Tasks = () => {
         const staffRes = await api.get("/users");
         setStaff(staffRes.data);
       }
-    } catch (error) {
-      showToast("Failed to initialize tasks pipeline data.", "error");
+    } catch {
+      showToast("Couldn't load tasks. Please refresh the page.", "error");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCreateTask = async (e) => {
@@ -88,12 +391,12 @@ const Tasks = () => {
         project_id: projectId ? parseInt(projectId) : null,
       });
 
-      showToast("Task assigned and deployed successfully.", "success");
+      showToast("Task created.", "success");
       setTasks((prev) => [...prev, response.data]);
       setShowCreateModal(false);
       resetForm();
     } catch (error) {
-      showToast(error.response?.data?.detail || "Failed to assign task.", "error");
+      showToast(error.response?.data?.detail || "Couldn't create the task.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -137,15 +440,14 @@ const Tasks = () => {
       if (isCompleting && selectedTask.assigned_to_id === user?.id) {
         const freshUser = await refreshUserProfile();
         const newLevel = freshUser?.level || oldLevel;
-        showToast(`Operation Completed! +${selectedTask.xp} XP earned! ⚡`, "success");
-        if (newLevel > oldLevel) {
-          showToast(`LEVEL UP! You reached Level ${newLevel}! 🎉`, "success");
-        }
+        showToast(`Task complete. +${selectedTask.xp} XP earned.`, "success");
+        // Level-ups are celebrated by <LevelUpCelebration /> in the layout.
+        void newLevel;
       } else {
-        showToast("Task updated successfully.", "success");
+        showToast("Task updated.", "success");
       }
     } catch (error) {
-      showToast(error.response?.data?.detail || "Failed to update task.", "error");
+      showToast(error.response?.data?.detail || "Couldn't update the task.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -161,12 +463,12 @@ const Tasks = () => {
     try {
       setSubmitting(true);
       await api.delete(`/tasks/${selectedTask.id}`);
-      showToast("Task deleted successfully.", "success");
+      showToast("Task deleted.", "success");
       setTasks((prev) => prev.filter((t) => t.id !== selectedTask.id));
       setShowDeleteModal(false);
       setSelectedTask(null);
-    } catch (error) {
-      showToast("Failed to delete task.", "error");
+    } catch {
+      showToast("Couldn't delete the task.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -194,16 +496,68 @@ const Tasks = () => {
       if (isCompleting && targetTask?.assigned_to_id === user?.id) {
         const freshUser = await refreshUserProfile();
         const newLevel = freshUser?.level || oldLevel;
-        showToast(`Operation Completed! +${targetTask.xp} XP earned! ⚡`, "success");
-        if (newLevel > oldLevel) {
-          showToast(`LEVEL UP! You reached Level ${newLevel}! 🎉`, "success");
-        }
+        showToast(`Task complete. +${targetTask.xp} XP earned.`, "success");
+        // Level-ups are celebrated by <LevelUpCelebration /> in the layout.
+        void newLevel;
       } else {
-        showToast(`Task status shifted to '${newStatus}'.`, "success");
+        showToast(`Task moved to ${newStatus === "In Progress" ? "In progress" : newStatus === "Completed" ? "Done" : "To do"}.`, "success");
       }
+      return true;
     } catch (error) {
-      showToast(error.response?.data?.detail || "Failed to shift task status.", "error");
+      showToast(error.response?.data?.detail || "Couldn't change the task status.", "error");
+      return false;
     }
+  };
+
+  /* ---------- Drag and drop between columns ---------- */
+
+  // Done cards are locked for everyone. Managers and admins can move open tasks between any
+  // columns, as their Edit dialog already allows. Employees get exactly the next step the
+  // Start / Complete buttons offer on their own tasks: To do -> In progress -> Done.
+  const canMoveTo = (task, target) => {
+    if (!task || task.status === target || task.status === "Completed") return false;
+    if (canAssign) return true;
+    if (task.status === "Todo") return target === "In Progress" && canStartTask(task);
+    if (task.status === "In Progress") return target === "Completed" && canCompleteTask(task);
+    return false;
+  };
+  const canDragTask = (task) => task.status !== "Completed" && (canStartTask(task) || canCompleteTask(task));
+
+  const [activeTaskId, setActiveTaskId] = useState(null);
+  const activeTask = activeTaskId ? tasks.find((t) => t.id === activeTaskId) : null;
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: columnKeyboardCoordinates })
+  );
+  const collision = (args) => {
+    const hits = pointerWithin(args);
+    return hits.length ? hits : rectIntersection(args);
+  };
+
+  const handleDragEnd = async ({ active, over }) => {
+    setActiveTaskId(null);
+    const task = tasks.find((t) => t.id === active.id);
+    const target = over?.id;
+    if (!task || !target || !canMoveTo(task, target)) return;
+    const previous = task.status;
+    // Move the card immediately; roll back if the server refuses.
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: target } : t)));
+    markTouched(task.id);
+    const ok = await handleUpdateStatus(task.id, target);
+    if (!ok) setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: previous } : t)));
+  };
+
+  const titleOf = (active) => active.data.current?.task?.title || "Task";
+  const announcements = {
+    onDragStart: ({ active }) => `Picked up ${titleOf(active)}.`,
+    onDragOver: ({ active, over }) =>
+      over
+        ? `${titleOf(active)} is over ${STATUS_LABEL[over.id]}${canMoveTo(active.data.current?.task, over.id) ? "" : ", which it can't move to"}.`
+        : `${titleOf(active)} is not over a column.`,
+    onDragEnd: ({ active, over }) =>
+      over && canMoveTo(active.data.current?.task, over.id) ? `Moved ${titleOf(active)} to ${STATUS_LABEL[over.id]}.` : `${titleOf(active)} was not moved.`,
+    onDragCancel: ({ active }) => `Cancelled. ${titleOf(active)} was not moved.`,
   };
 
   const resetForm = () => {
@@ -216,525 +570,475 @@ const Tasks = () => {
     setSelectedTask(null);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <Spinner size="lg" color="violet" />
-      </div>
-    );
-  }
+  // Client-side view filtering (search + scope). Does not alter the task list itself.
+  const visibleTasks = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return tasks.filter((t) => {
+      if (scope === "mine" && t.assigned_to_id !== user?.id) return false;
+      if (!q) return true;
+      return (
+        t.title.toLowerCase().includes(q) ||
+        (t.description || "").toLowerCase().includes(q) ||
+        (t.project?.name || "").toLowerCase().includes(q) ||
+        (t.assigned_to?.first_name || "").toLowerCase().includes(q)
+      );
+    });
+  }, [tasks, search, scope, user?.id]);
 
-  // Filter tasks into columns
-  const todoTasks = tasks.filter((t) => t.status === "Todo");
-  const inProgressTasks = tasks.filter((t) => t.status === "In Progress");
-  const completedTasks = tasks.filter((t) => t.status === "Completed");
+  const byStatus = (key) => visibleTasks.filter((t) => t.status === key);
+  const DONE_PREVIEW = 6;
+  const rank = (t) => {
+    const i = touched.indexOf(t.id);
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  // Done column: recently touched first, then newest; collapsed unless expanded or searching.
+  const columnTasks = (key) => {
+    const list = byStatus(key);
+    if (key !== "Completed") return list;
+    const sorted = [...list].sort((a, b) => rank(a) - rank(b) || b.id - a.id);
+    return showAllDone || search.trim() ? sorted : sorted.slice(0, DONE_PREVIEW);
+  };
+  const mineCount = tasks.filter((t) => t.assigned_to_id === user?.id).length;
+  const openNew = () => {
+    resetForm();
+    setShowCreateModal(true);
+  };
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <span className="text-[10px] font-bold tracking-widest text-neon-violet uppercase">Operations Grid</span>
-          <h1 className="text-2xl font-display font-extrabold text-slate-100 mt-1">OPERATIONS PIPELINE</h1>
-        </div>
-        {canAssign && (
-          <button
-            onClick={() => {
-              resetForm();
-              setShowCreateModal(true);
-            }}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-neon-violet text-white font-bold text-xs uppercase tracking-widest border border-neon-violet/30 hover:shadow-[0_0_12px_rgba(139,92,246,0.3)] transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Deploy Operation</span>
-          </button>
+  /* Shared form body for create and edit. Status only appears when editing. */
+  const renderTaskFields = (withStatus) => (
+    <div className="flex flex-col gap-4">
+      <Field label="Title">
+        {(p) => (
+          <input
+            {...p}
+            type="text"
+            className="control"
+            placeholder="Write the onboarding email sequence"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            data-testid="task-title-input"
+            data-autofocus
+            required
+          />
+        )}
+      </Field>
+
+      <Field label="Description" optional>
+        {(p) => (
+          <textarea
+            {...p}
+            className="control"
+            rows={3}
+            placeholder="What does done look like?"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        )}
+      </Field>
+
+      {/* Live suggestions while creating a task (managers and admins only reach this dialog) */}
+      {!withStatus && (
+        <TaskAssistantPanel
+          title={title}
+          description={description}
+          projectId={projectId}
+          tasks={tasks}
+          staff={staff}
+          xp={xp}
+          assignedToId={assignedToId}
+          onApplyXp={(value) => setXp(value)}
+          onAssign={(id) => setAssignedToId(id)}
+        />
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="XP reward" hint="Between 10 and 5000.">
+          {(p) => (
+            <input
+              {...p}
+              type="number"
+              className="control num"
+              value={xp}
+              onChange={(e) => setXp(e.target.value)}
+              min={10}
+              required
+            />
+          )}
+        </Field>
+
+        {withStatus ? (
+          <Field label="Status">
+            {(p) => (
+              <select {...p} className="control" value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="Todo">To do</option>
+                <option value="In Progress">In progress</option>
+                <option value="Completed">Done</option>
+              </select>
+            )}
+          </Field>
+        ) : (
+          <Field label="Project">
+            {(p) => (
+              <select {...p} className="control" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                <option value="">No project</option>
+                {projects.map((pr) => (
+                  <option key={pr.id} value={pr.id}>{pr.name}</option>
+                ))}
+              </select>
+            )}
+          </Field>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Todo Column */}
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-900/60">
-            <ListTodo className="w-4 h-4 text-neon-violet" />
-            <h3 className="font-display font-bold text-xs uppercase tracking-wider text-slate-300">Staging Area</h3>
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-950/60 border border-slate-900 text-slate-500 font-mono">
-              {todoTasks.length}
-            </span>
-          </div>
+      <div className={`grid grid-cols-1 gap-4 ${withStatus ? "sm:grid-cols-2" : ""}`}>
+        {withStatus && (
+          <Field label="Project">
+            {(p) => (
+              <select {...p} className="control" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                <option value="">No project</option>
+                {projects.map((pr) => (
+                  <option key={pr.id} value={pr.id}>{pr.name}</option>
+                ))}
+              </select>
+            )}
+          </Field>
+        )}
+        <Field label="Assignee">
+          {(p) => (
+            <select {...p} className="control" value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)}>
+              <option value="">Unassigned</option>
+              {staff.map((u) => (
+                <option key={u.id} value={u.id}>{u.first_name} ({u.role})</option>
+              ))}
+            </select>
+          )}
+        </Field>
+      </div>
+    </div>
+  );
 
-          <div className="flex flex-col gap-3">
-            {todoTasks.map((task) => (
-              <Card key={task.id} glowColor="violet" className="bg-bg-card border-slate-900/50">
-                <div className="flex flex-col gap-3">
-                  <div className="flex justify-between items-start">
-                    <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-neon-violet/10 border border-neon-violet/25 text-neon-violet uppercase tracking-widest">
-                      Todo
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => openDetailModal(task)} title="View Detail" className="text-slate-500 hover:text-slate-300">
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      {canAssign && (
-                        <button onClick={() => openEditModal(task)} title="Edit Task" className="text-slate-500 hover:text-neon-violet">
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button onClick={() => openDeleteModal(task)} title="Delete Task" className="text-slate-500 hover:text-neon-rose">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <span className="text-[10px] font-bold text-neon-violet font-mono uppercase tracking-wider ml-1">
-                        {task.xp} XP
-                      </span>
-                    </div>
-                  </div>
-                  <h4 className="text-xs font-bold text-slate-200 leading-relaxed">{task.title}</h4>
-                  {task.description && (
-                    <p className="text-[10px] text-slate-400 font-sans">{task.description}</p>
-                  )}
-                  
-                  {/* Metadata and Actions */}
-                  <div className="flex flex-col gap-2 pt-2 border-t border-slate-900/60 text-[9px] text-slate-500 font-mono">
-                    <div className="flex justify-between">
-                      {task.project && (
-                        <span className="flex items-center gap-1"><Folder className="w-3 h-3" /> {task.project.name}</span>
-                      )}
-                      {task.assigned_to && (
-                        <span className="flex items-center gap-1"><User className="w-3 h-3" /> {task.assigned_to.first_name}</span>
-                      )}
-                    </div>
-                    {canStartTask(task) && (
-                      <button
-                        data-testid="task-start"
-                        onClick={() => handleUpdateStatus(task.id, "In Progress")}
-                        className="w-full mt-1 py-1 rounded bg-neon-violet/10 hover:bg-neon-violet hover:text-white border border-neon-violet/20 flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-wider transition-all"
-                      >
-                        Start Task <ArrowRight className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Tasks"
+        description={
+          canAssign
+            ? "Plan work, assign it to your team and track it to done. Finished tasks pay out XP."
+            : "Your assigned tasks. Start them, finish them and earn XP."
+        }
+        actions={
+          canAssign && (
+            <Button variant="primary" icon={Plus} onClick={openNew} data-testid="new-task-btn">
+              New task
+            </Button>
+          )
+        }
+      />
 
-        {/* In Progress Column */}
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-900/60">
-            <Flame className="w-4 h-4 text-neon-amber animate-pulse" />
-            <h3 className="font-display font-bold text-xs uppercase tracking-wider text-slate-300">Active Cycle</h3>
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-950/60 border border-slate-900 text-slate-500 font-mono">
-              {inProgressTasks.length}
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-3">
-            {inProgressTasks.map((task) => (
-              <Card key={task.id} glowColor="amber" className="bg-bg-card border-slate-900/50">
-                <div className="flex flex-col gap-3">
-                  <div className="flex justify-between items-start">
-                    <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-neon-amber/10 border border-neon-amber/25 text-neon-amber uppercase tracking-widest">
-                      Running
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => openDetailModal(task)} title="View Detail" className="text-slate-500 hover:text-slate-300">
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      {canAssign && (
-                        <button onClick={() => openEditModal(task)} title="Edit Task" className="text-slate-500 hover:text-neon-amber">
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button onClick={() => openDeleteModal(task)} title="Delete Task" className="text-slate-500 hover:text-neon-rose">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <span className="text-[10px] font-bold text-neon-amber font-mono uppercase tracking-wider ml-1">
-                        {task.xp} XP
-                      </span>
-                    </div>
-                  </div>
-                  <h4 className="text-xs font-bold text-slate-200 leading-relaxed">{task.title}</h4>
-                  {task.description && (
-                    <p className="text-[10px] text-slate-400 font-sans">{task.description}</p>
-                  )}
-                  
-                  {/* Metadata and Actions */}
-                  <div className="flex flex-col gap-2 pt-2 border-t border-slate-900/60 text-[9px] text-slate-500 font-mono">
-                    <div className="flex justify-between">
-                      {task.project && (
-                        <span className="flex items-center gap-1"><Folder className="w-3 h-3" /> {task.project.name}</span>
-                      )}
-                      {task.assigned_to && (
-                        <span className="flex items-center gap-1"><User className="w-3 h-3" /> {task.assigned_to.first_name}</span>
-                      )}
-                    </div>
-                    {canCompleteTask(task) && (
-                      <button
-                        data-testid="task-complete"
-                        onClick={() => handleUpdateStatus(task.id, "Completed")}
-                        className="w-full mt-1 py-1 rounded bg-neon-emerald/10 hover:bg-neon-emerald hover:text-white border border-neon-emerald/20 flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-wider transition-all"
-                      >
-                        Complete Task ✓
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-
-        {/* Completed Column */}
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-900/60">
-            <CheckCircle className="w-4 h-4 text-neon-emerald" />
-            <h3 className="font-display font-bold text-xs uppercase tracking-wider text-slate-300">Completed Nodes</h3>
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-950/60 border border-slate-900 text-slate-500 font-mono">
-              {completedTasks.length}
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-3 opacity-80">
-            {completedTasks.map((task) => (
-              <Card key={task.id} glowColor="none" hoverEffect={false} className="bg-bg-card border-slate-900/80">
-                <div className="flex flex-col gap-3">
-                  <div className="flex justify-between items-start">
-                    <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-neon-emerald/10 border border-neon-emerald/25 text-neon-emerald uppercase tracking-widest">
-                      Completed
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => openDetailModal(task)} title="View Detail" className="text-slate-500 hover:text-slate-300">
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      {canDelete && (
-                        <button onClick={() => openDeleteModal(task)} title="Delete Task" className="text-slate-500 hover:text-neon-rose">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <span className="text-[10px] font-bold text-neon-emerald font-mono uppercase tracking-wider ml-1">
-                        +{task.xp} XP
-                      </span>
-                    </div>
-                  </div>
-                  <h4 className="text-xs font-bold text-slate-400 line-through leading-relaxed">{task.title}</h4>
-                  
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-900/60 text-[9px] text-slate-600 font-mono">
-                    {task.project && (
-                      <span className="flex items-center gap-1"><Folder className="w-3 h-3" /> {task.project.name}</span>
-                    )}
-                    {task.assigned_to && (
-                      <span className="flex items-center gap-1"><User className="w-3 h-3" /> {task.assigned_to.first_name}</span>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+      {/* Toolbar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {canAssign ? (
+          <Segmented
+            ariaLabel="Task scope"
+            layoutId="tasks-scope"
+            value={scope}
+            onChange={setScope}
+            options={[
+              { value: "all", label: "All tasks", count: tasks.length },
+              { value: "mine", label: "Assigned to me", count: mineCount },
+            ]}
+          />
+        ) : (
+          // Employees only ever receive their own tasks from the API, so there is nothing to switch.
+          <p className="text-sm text-fg-muted" data-testid="my-task-count">
+            <span className="num font-semibold text-fg">{tasks.length}</span> {tasks.length === 1 ? "task" : "tasks"} assigned to you
+          </p>
+        )}
+        <div className="w-full sm:w-72">
+          <TextInput
+            icon={MagnifyingGlass}
+            type="search"
+            placeholder="Search tasks"
+            aria-label="Search tasks"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-10"
+          />
         </div>
       </div>
 
-      {/* Task Creation Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-bg-card border border-slate-800 rounded-2xl shadow-2xl relative">
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-neon-violet to-neon-emerald" />
-            
-            <div className="p-6 flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-display font-extrabold text-lg text-slate-100 uppercase tracking-wider">Deploy Operation</h3>
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="p-1 rounded-lg border border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-900 transition-all cursor-pointer"
+      {loading ? (
+        <BoardSkeleton />
+      ) : tasks.length === 0 ? (
+        <div className="surface-flat">
+          <EmptyState
+            icon={Kanban}
+            title="No tasks yet"
+            description={canAssign ? "Create the first task and assign it to someone on your team." : "When a manager assigns you a task it will show up here."}
+            action={canAssign && <Button variant="primary" icon={Plus} onClick={openNew}>New task</Button>}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Column switcher on phones; all three columns side by side from md up */}
+          <div className="md:hidden">
+            <Segmented
+              ariaLabel="Board column"
+              layoutId="tasks-column"
+              value={mobileColumn}
+              onChange={setMobileColumn}
+              className="w-full [&>button]:flex-1"
+              options={COLUMNS.map((c) => ({ value: c.key, label: c.label, count: byStatus(c.key).length }))}
+            />
+          </div>
+
+          <DndContext
+            sensors={sensors}
+            collisionDetection={collision}
+            onDragStart={({ active }) => setActiveTaskId(active.id)}
+            onDragCancel={() => setActiveTaskId(null)}
+            onDragEnd={handleDragEnd}
+            accessibility={{
+              announcements,
+              screenReaderInstructions: {
+                draggable:
+                  "To move a task, press space or enter on its grip. Use the arrow keys to move between columns, then press space or enter to drop it, or escape to cancel.",
+              },
+            }}
+          >
+          <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-3">
+            {COLUMNS.map((col) => {
+              const total = byStatus(col.key).length;
+              const list = columnTasks(col.key);
+              const hiddenCount = total - list.length;
+              const Icon = col.icon;
+              const dropState = activeTask
+                ? activeTask.status === col.key
+                  ? "origin"
+                  : canMoveTo(activeTask, col.key)
+                    ? "allowed"
+                    : "blocked"
+                : undefined;
+              return (
+                <DroppableColumn
+                  key={col.key}
+                  id={col.key}
+                  state={dropState}
+                  data-testid={`column-${col.key}`}
+                  aria-labelledby={`col-${col.key}`}
+                  className={`min-w-0 flex-col gap-3 rounded-[18px] border border-line bg-bg-sunken/60 p-2.5 ${
+                    mobileColumn === col.key ? "flex" : "hidden"
+                  } md:flex`}
                 >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+                  <header className="flex items-center gap-2 px-1.5 pt-1">
+                    <Icon size={16} weight={col.key === "Completed" ? "fill" : "bold"} className={col.tone} />
+                    <h2 id={`col-${col.key}`} className="text-sm font-semibold text-fg">{col.label}</h2>
+                    <span className="num ml-auto text-xs text-fg-subtle">{total}</span>
+                  </header>
 
-              <form onSubmit={handleCreateTask} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Task Title</label>
-                  <input
-                    type="text"
-                    placeholder="Implement active directory modules"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-violet/50"
-                    required
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Description</label>
-                  <textarea
-                    placeholder="Provide full description of operations tasks..."
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={3}
-                    className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-violet/50 resize-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Experience (XP)</label>
-                    <input
-                      type="number"
-                      value={xp}
-                      onChange={(e) => setXp(e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-violet/50 font-mono"
-                      min={10}
-                      required
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target Project</label>
-                    <select
-                      value={projectId}
-                      onChange={(e) => setProjectId(e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-xs text-slate-300 focus:outline-none focus:border-neon-violet/50 cursor-pointer"
-                    >
-                      <option value="">Select Project</option>
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
+                  <div className="flex flex-col gap-2.5">
+                    <AnimatePresence initial={false} mode="popLayout">
+                      {list.map((task) => (
+                        <DraggableTaskCard key={task.id} task={task} draggable={canDragTask(task)}>
+                        {(handle) => (
+                        <TaskCard
+                          dragHandle={handle}
+                          task={task}
+                          isMine={task.assigned_to_id === user?.id}
+                          canEdit={canAssign && col.key !== "Completed"}
+                          canDelete={canDelete}
+                          canStart={canStartTask(task)}
+                          canComplete={canCompleteTask(task)}
+                          onOpen={openDetailModal}
+                          onEdit={openEditModal}
+                          onDelete={openDeleteModal}
+                          onStart={(t) => {
+                            markTouched(t.id);
+                            handleUpdateStatus(t.id, "In Progress");
+                          }}
+                          onComplete={(t) => {
+                            markTouched(t.id);
+                            handleUpdateStatus(t.id, "Completed");
+                          }}
+                        />
+                        )}
+                        </DraggableTaskCard>
                       ))}
-                    </select>
+                    </AnimatePresence>
+                    {col.key === "Completed" && (hiddenCount > 0 || (showAllDone && total > DONE_PREVIEW)) && !search.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllDone((v) => !v)}
+                        aria-expanded={showAllDone}
+                        className="btn btn-ghost btn-sm w-full"
+                        data-testid="toggle-done"
+                      >
+                        {showAllDone ? "Show fewer" : `Show all ${total}`}
+                      </button>
+                    )}
+                    {list.length === 0 && (
+                      <motion.p
+                        initial={reduce ? false : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="rounded-[12px] border border-dashed border-line-strong px-4 py-8 text-center text-[0.8125rem] text-fg-subtle"
+                      >
+                        {search || scope === "mine" ? "Nothing matches these filters." : col.key === "Completed" ? "Finished tasks land here." : "No tasks in this column."}
+                      </motion.p>
+                    )}
                   </div>
-                </div>
+                </DroppableColumn>
+              );
+            })}
+          </div>
+          <DragOverlay dropAnimation={reduce ? null : { duration: 220, easing: "cubic-bezier(0.23, 1, 0.32, 1)" }}>
+            {activeTask ? (
+              <TaskCard
+                overlay
+                task={activeTask}
+                isMine={activeTask.assigned_to_id === user?.id}
+                canEdit={false}
+                canDelete={false}
+                canStart={false}
+                canComplete={false}
+                onOpen={() => {}}
+                onEdit={() => {}}
+                onDelete={() => {}}
+                onStart={() => {}}
+                onComplete={() => {}}
+              />
+            ) : null}
+          </DragOverlay>
+          </DndContext>
+        </>
+      )}
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Assignee</label>
-                  <select
-                    value={assignedToId}
-                    onChange={(e) => setAssignedToId(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-xs text-slate-300 focus:outline-none focus:border-neon-violet/50 cursor-pointer"
-                  >
-                    <option value="">Select Assignee</option>
-                    {staff.map((u) => (
-                      <option key={u.id} value={u.id}>{u.first_name} ({u.role})</option>
-                    ))}
-                  </select>
-                </div>
+      {/* Create */}
+      <Modal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="New task"
+        description="Assign work and set how much XP it pays out."
+        testId="create-task-modal"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowCreateModal(false)}>Cancel</Button>
+            <Button type="submit" form="create-task-form" variant="primary" icon={Plus} loading={submitting} data-testid="task-submit">
+              Create task
+            </Button>
+          </>
+        }
+      >
+        <form id="create-task-form" onSubmit={handleCreateTask}>
+          {renderTaskFields(false)}
+        </form>
+      </Modal>
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full mt-2 rounded-xl py-3.5 bg-neon-violet text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-neon-violet/30 hover:bg-neon-violet/90 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {submitting ? (
-                    <Spinner size="sm" color="white" />
-                  ) : (
+      {/* Edit */}
+      <Modal
+        open={showEditModal && !!selectedTask}
+        onClose={() => setShowEditModal(false)}
+        title="Edit task"
+        description="Marking a task done awards its XP to the assignee."
+        testId="edit-task-modal"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowEditModal(false)}>Cancel</Button>
+            <Button type="submit" form="edit-task-form" variant="primary" loading={submitting} data-testid="task-update-submit">
+              Save changes
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="edit-task-form"
+          onSubmit={(e) => {
+            markTouched(selectedTask?.id);
+            handleUpdateTask(e);
+          }}
+        >
+          {renderTaskFields(true)}
+        </form>
+      </Modal>
+
+      {/* Details */}
+      <Modal
+        open={showDetailModal && !!selectedTask}
+        onClose={() => setShowDetailModal(false)}
+        title={selectedTask?.title}
+        testId="task-detail-modal"
+        footer={<Button variant="secondary" onClick={() => setShowDetailModal(false)}>Close</Button>}
+      >
+        {selectedTask && (
+          <div className="flex flex-col gap-5">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
+              <div>
+                <dt className="text-xs text-fg-subtle">Status</dt>
+                <dd className="mt-1"><StatusBadge status={selectedTask.status} /></dd>
+              </div>
+              <div>
+                <dt className="text-xs text-fg-subtle">XP reward</dt>
+                <dd className="num mt-1 font-semibold text-accent-text">+{selectedTask.xp} XP</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-fg-subtle">Assignee</dt>
+                <dd className="mt-1 flex items-center gap-2 text-fg">
+                  {selectedTask.assigned_to ? (
                     <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Deploy Operation</span>
+                      <Avatar name={selectedTask.assigned_to.first_name} size={22} />
+                      <span className="truncate">{selectedTask.assigned_to.first_name}</span>
                     </>
+                  ) : (
+                    <span className="text-fg-muted">Unassigned</span>
                   )}
-                </button>
-              </form>
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-fg-subtle">Project</dt>
+                <dd className="mt-1 truncate text-fg">{selectedTask.project ? selectedTask.project.name : <span className="text-fg-muted">None</span>}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-fg-subtle">Created</dt>
+                <dd className="mt-1 text-fg-muted">{new Date(selectedTask.created_at).toLocaleString()}</dd>
+              </div>
+              {selectedTask.due_date && (
+                <div>
+                  <dt className="text-xs text-fg-subtle">Due</dt>
+                  <dd className={`mt-1 ${isOverdue(selectedTask) ? "font-medium text-danger" : "text-fg-muted"}`}>
+                    {formatDate(selectedTask.due_date, { month: "short", day: "numeric", year: "numeric" })}
+                  </dd>
+                </div>
+              )}
+            </dl>
+            <div>
+              <p className="text-xs text-fg-subtle">Description</p>
+              <p className="mt-1.5 whitespace-pre-line rounded-[12px] border border-line bg-bg-sunken p-3.5 text-sm leading-relaxed text-fg-muted">
+                {selectedTask.description || "No description added."}
+              </p>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
-      {/* Task Edit Modal */}
-      {showEditModal && selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-bg-card border border-slate-800 rounded-2xl shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-neon-violet to-neon-emerald" />
-            
-            <div className="p-6 flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-display font-extrabold text-lg text-slate-100 uppercase tracking-wider">Edit Task Operation</h3>
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="p-1 rounded-lg text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleUpdateTask} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Task Title</label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-violet/50"
-                    required
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Description</label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={3}
-                    className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-violet/50 resize-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Experience (XP)</label>
-                    <input
-                      type="number"
-                      value={xp}
-                      onChange={(e) => setXp(e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-neon-violet/50 font-mono"
-                      min={10}
-                      required
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</label>
-                    <select
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-xs text-slate-300 focus:outline-none focus:border-neon-violet/50 cursor-pointer"
-                    >
-                      <option value="Todo">Todo</option>
-                      <option value="In Progress">In Progress</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target Project</label>
-                    <select
-                      value={projectId}
-                      onChange={(e) => setProjectId(e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-xs text-slate-300 focus:outline-none focus:border-neon-violet/50 cursor-pointer"
-                    >
-                      <option value="">Select Project</option>
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Assignee</label>
-                    <select
-                      value={assignedToId}
-                      onChange={(e) => setAssignedToId(e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-900 rounded-xl py-2.5 px-3.5 text-xs text-slate-300 focus:outline-none focus:border-neon-violet/50 cursor-pointer"
-                    >
-                      <option value="">Select Assignee</option>
-                      {staff.map((u) => (
-                        <option key={u.id} value={u.id}>{u.first_name} ({u.role})</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full mt-2 rounded-xl py-3 bg-neon-violet text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-neon-violet/30 hover:bg-neon-violet/90 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {submitting ? <Spinner size="sm" color="white" /> : <span>Update Task</span>}
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Task Detail View Modal */}
-      {showDetailModal && selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-bg-card border border-slate-800 rounded-2xl shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-neon-violet to-neon-emerald" />
-            
-            <div className="p-6 flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-display font-extrabold text-base text-slate-100 uppercase tracking-wider">{selectedTask.title}</h3>
-                <button
-                  onClick={() => setShowDetailModal(false)}
-                  className="p-1 rounded-lg text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="flex flex-col gap-2.5 text-xs text-slate-300 border-t border-b border-slate-900/80 py-4 font-mono">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Status:</span>
-                  <span className="font-bold text-neon-violet">{selectedTask.status}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">XP Reward:</span>
-                  <span className="font-bold text-neon-emerald">+{selectedTask.xp} XP</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Assigned To:</span>
-                  <span className="text-slate-200">{selectedTask.assigned_to ? selectedTask.assigned_to.first_name : "Unassigned"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Project:</span>
-                  <span className="text-slate-200">{selectedTask.project ? selectedTask.project.name : "None"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Deployed Date:</span>
-                  <span className="text-slate-400">{new Date(selectedTask.created_at).toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operational Scope</span>
-                <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-3 rounded-xl border border-slate-900">
-                  {selectedTask.description || "No detailed instructions attached."}
-                </p>
-              </div>
-
-              <button
-                onClick={() => setShowDetailModal(false)}
-                className="w-full mt-2 rounded-xl py-2.5 bg-slate-900 text-slate-300 font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all cursor-pointer"
-              >
-                Close View
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-bg-card border border-slate-800 rounded-2xl shadow-2xl p-6 flex flex-col gap-4 text-center">
-            <div className="w-12 h-12 rounded-full bg-neon-rose/10 border border-neon-rose/20 text-neon-rose flex items-center justify-center mx-auto text-xl font-bold">
-              <Trash2 className="w-6 h-6" />
-            </div>
-            <h3 className="font-display font-extrabold text-slate-100 text-base uppercase tracking-wider">Delete Task?</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Are you sure you want to delete <span className="text-slate-200 font-bold">"{selectedTask.title}"</span>? This action cannot be undone.
-            </p>
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-300 text-xs font-bold uppercase tracking-wider hover:bg-slate-800 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteTask}
-                disabled={submitting}
-                className="flex-1 py-2.5 rounded-xl border border-neon-rose/30 bg-neon-rose text-white text-xs font-bold uppercase tracking-wider hover:bg-neon-rose/90 cursor-pointer disabled:opacity-50"
-              >
-                {submitting ? <Spinner size="sm" color="white" /> : "Confirm Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete confirmation */}
+      <Modal
+        open={showDeleteModal && !!selectedTask}
+        onClose={() => setShowDeleteModal(false)}
+        title="Delete this task?"
+        size="sm"
+        testId="delete-task-modal"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
+            <Button variant="danger" icon={Trash} onClick={handleDeleteTask} loading={submitting} data-testid="confirm-delete">
+              Delete task
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-fg-muted">
+          <span className="font-semibold text-fg">{selectedTask?.title}</span> will be removed for everyone. This can't be undone.
+        </p>
+      </Modal>
     </div>
   );
 };
